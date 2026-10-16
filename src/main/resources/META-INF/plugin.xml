@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<idea-plugin>
+    <id>com.up3d.i18n.helper</id>
+    <name>i18n Helper</name>
+    <vendor>UP3D</vendor>
+
+    <description><![CDATA[
+    WebStorm 侧的 i18n 辅助插件，面向 i18next 单文件语言包结构。<br/>
+    能力规划：语言包结构校验、<code>t('key')</code> 跳转与预览、缺失翻译检测、批量机器翻译。
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="i18n.helper.notifications"
+                           displayType="BALLOON"
+                           isLogByDefault="true"/>
+
+        <!-- 行内译文提示：在 t('key') 之后显示对应语言的译文。
+             覆盖 js / jsx / ts / tsx / vue / html，语言清单见 I18nInlayProviderFactory。 -->
+        <codeInsight.declarativeInlayProviderFactory
+                implementation="com.up3d.i18n.editor.I18nInlayProviderFactory"/>
+    </extensions>
+
+    <actions>
+        <action id="com.up3d.i18n.ScanLocales"
+                class="com.up3d.i18n.actions.ScanLocalesAction"
+                text="i18n: 扫描语言包一致性"
+                description="扫描项目内的 i18n 语言包，统计各语言 key 的缺失与多余情况">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action id="com.up3d.i18n.DiagnoseCurrentFile"
+                class="com.up3d.i18n.actions.DiagnoseCurrentFileAction"
+                text="i18n: 诊断当前文件的译文提示"
+                description="逐步检查当前文件为何显示/不显示行内译文提示，并预览将要显示的译文">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action id="com.up3d.i18n.BatchTranslate"
+                class="com.up3d.i18n.actions.BatchTranslateAction"
+                text="i18n: 批量翻译缺失文案"
+                description="以源语言(en)为准，把各语言缺失的 key 机器翻译补齐，写入前先预览确认">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

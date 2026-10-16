@@ -1,0 +1,10 @@
+.gradle/
+.kotlin/
+build/
+out/
+*.iml
+.idea/
+.DS_Store
+
+# IntelliJ Platform Gradle Plugin 生成的本地缓存与沙盒 IDE 配置
+.intellijPlatform/
