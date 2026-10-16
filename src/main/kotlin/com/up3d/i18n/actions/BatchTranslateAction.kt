@@ -54,18 +54,19 @@ class BatchTranslateAction : AnAction() {
             return
         }
 
-        val repository = LocaleRepository(root)
-        val report = repository.buildReport(SOURCE_LOCALE)
+        val context = com.up3d.i18n.settings.I18nContext.of(project)
+        val repository = context.repository() ?: return
+        val report = repository.buildReport(context.sourceLocale)
         if (report.isEmpty) {
             notify(
                 project,
-                "未找到语言包。期望路径：${LocaleRepository.DEFAULT_LOCALES_DIR}/<locale>/${LocaleRepository.LOCALE_FILE_NAME}",
+                "未找到语言包。当前配置：路径 ${context.localesPath} + 模式 ${context.pathMatcher}",
                 NotificationType.WARNING,
             )
             return
         }
 
-        val sourceValues = repository.valuesOf(SOURCE_LOCALE)
+        val sourceValues = repository.valuesOf(context.sourceLocale)
         val units = buildUnits(report.missing, sourceValues)
 
         if (units.isEmpty()) {
@@ -79,7 +80,7 @@ class BatchTranslateAction : AnAction() {
 
         val answer = Messages.showYesNoDialog(
             project,
-            buildPreview(units),
+            buildPreview(units, context.sourceLocale),
             TITLE,
             "开始翻译",
             "取消",
@@ -87,7 +88,7 @@ class BatchTranslateAction : AnAction() {
         )
         if (answer != Messages.YES) return
 
-        runTranslation(project, repository, units)
+        runTranslation(project, repository, units, context.sourceLocale)
     }
 
     /** 把「各语言缺失 key」压平成去重后的翻译单元。 */
@@ -110,7 +111,7 @@ class BatchTranslateAction : AnAction() {
         return units
     }
 
-    private fun buildPreview(units: List<TranslateUnit>): String {
+    private fun buildPreview(units: List<TranslateUnit>, sourceLocale: String): String {
         val perLocale = LinkedHashMap<String, Int>()
         var totalKeys = 0
         for (unit in units) {
@@ -119,7 +120,7 @@ class BatchTranslateAction : AnAction() {
         }
 
         return buildString {
-            appendLine("本操作将把 $SOURCE_LOCALE 的原文翻译成下列语言并写入语言包：")
+            appendLine("本操作将把 $sourceLocale 的原文翻译成下列语言并写入语言包：")
             appendLine()
             for ((locale, count) in perLocale) {
                 appendLine("  $locale　$count 条")
@@ -131,7 +132,7 @@ class BatchTranslateAction : AnAction() {
             appendLine("预览：")
             for (unit in units.take(3)) {
                 appendLine("  ${unit.keys.first()}")
-                appendLine("    en：${unit.sourceText}")
+                appendLine("    $sourceLocale：${unit.sourceText}")
             }
             if (units.size > 3) appendLine("  … 其余 ${units.size - 3} 条省略")
             appendLine()
@@ -143,6 +144,7 @@ class BatchTranslateAction : AnAction() {
         project: Project,
         repository: LocaleRepository,
         units: List<TranslateUnit>,
+        sourceLocale: String,
     ) {
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "i18n: 批量翻译语言包", true) {
@@ -157,7 +159,7 @@ class BatchTranslateAction : AnAction() {
                     try {
                         val futures = LinkedHashMap<TranslateUnit, java.util.concurrent.Future<String>>()
                         for (unit in units) {
-                            futures[unit] = executor.submit<String> { translateUnit(unit) }
+                            futures[unit] = executor.submit<String> { translateUnit(unit, sourceLocale) }
                         }
 
                         var done = 0
@@ -197,9 +199,9 @@ class BatchTranslateAction : AnAction() {
      * 单个翻译单元：套占位符保护 → 调引擎 → 还原。
      * 还原失败（占位符被翻译引擎改动或吞掉）时抛异常，该条被丢弃而不是写入坏内容。
      */
-    private fun translateUnit(unit: TranslateUnit): String {
+    private fun translateUnit(unit: TranslateUnit, sourceLocale: String): String {
         val protected = PlaceholderProtector.protect(unit.sourceText)
-        val raw = ENGINE.translateOne(protected.text, unit.locale, SOURCE_LOCALE)
+        val raw = ENGINE.translateOne(protected.text, unit.locale, sourceLocale)
         return protected.restore(raw)
             ?: throw TranslationException("占位符在翻译后丢失，为保证质量已丢弃该条")
     }
@@ -215,8 +217,8 @@ class BatchTranslateAction : AnAction() {
         // VFS 定位放在写操作之前做，避免把刷新混进写命令里
         val targets = LinkedHashMap<String, VirtualFile>()
         for (locale in byLocale.keys) {
-            val virtualFile = LocalFileSystem.getInstance()
-                .refreshAndFindFileByIoFile(repository.localeFile(locale))
+            val file = repository.localeFile(locale) ?: continue
+            val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
             if (virtualFile != null) targets[locale] = virtualFile
         }
 
@@ -266,7 +268,6 @@ class BatchTranslateAction : AnAction() {
     }
 
     private companion object {
-        const val SOURCE_LOCALE = "en"
         const val TITLE = "i18n: 批量翻译"
         const val CONCURRENCY = 4
 

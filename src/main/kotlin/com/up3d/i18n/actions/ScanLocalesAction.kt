@@ -26,12 +26,14 @@ class ScanLocalesAction : AnAction() {
             return
         }
 
-        val report = LocaleRepository(root).buildReport()
+        val context = com.up3d.i18n.settings.I18nContext.of(project)
+        val repository = context.repository() ?: return
+        val report = repository.buildReport(context.sourceLocale)
 
         if (report.isEmpty) {
             notify(
                 project,
-                "未找到语言包。期望路径：${LocaleRepository.DEFAULT_LOCALES_DIR}/<locale>/${LocaleRepository.LOCALE_FILE_NAME}",
+                "未找到语言包。当前配置：路径 ${context.localesPath} + 模式 ${context.pathMatcher}",
                 NotificationType.WARNING,
             )
             return

@@ -7,9 +7,8 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.content.ContentFactory
-import com.up3d.i18n.locale.LocaleRepository
-import com.up3d.i18n.settings.I18nSettings
-import java.io.File
+import com.up3d.i18n.locale.LocaleKeys
+import com.up3d.i18n.settings.I18nContext
 
 /**
  * 侧边栏「i18n」面板的数据服务。
@@ -26,6 +25,8 @@ class I18nPanelService(private val project: Project) {
         val displayLocales: List<String>,
         /** locale -> (已翻译数, 总数)，用于进度概览。 */
         val progress: Map<String, Pair<Int, Int>>,
+        /** 配置或路径有问题时的提示信息，为空表示一切正常。 */
+        val warning: String = "",
     )
 
     private val listeners = mutableListOf<(Snapshot) -> Unit>()
@@ -47,49 +48,46 @@ class I18nPanelService(private val project: Project) {
     /** 取当前快照，未加载过则现场构建。 */
     fun snapshot(): Snapshot = cached ?: load().also { cached = it }
 
-    private fun load(): Snapshot {
-        val settings = I18nSettings.getInstance(project)
-        val state = settings.state
-        val root = project.basePath?.let(::File)
+    /**
+     * 挑选基准语言。
+     *
+     * 优先级：配置指定 → key 数量最多的语言 → 列表首个。
+     * 刻意**不简单取字母序首个** —— 目录名排序把 `ar`（阿拉伯语）排在最前，
+     * 一旦配置的源语言写错，整张表会以阿拉伯语为原文显示，
+     * 看起来"全是译文但 key 对不上"。用 key 数量兜底更稳。
+     */
+    private fun pickSource(configured: String, locales: List<LocaleKeys>): String? {
+        locales.firstOrNull { it.locale == configured }?.let { return it.locale }
+        return locales.maxByOrNull { it.keys.size }?.locale ?: locales.firstOrNull()?.locale
+    }
 
-        if (root == null || !root.isDirectory) {
-            return Snapshot(emptyList(), state.sourceLocale, state.displayLocales, emptyMap())
+    private fun load(): Snapshot {
+        val context = I18nContext.of(project)
+        if (!context.isValid) {
+            return Snapshot(emptyList(), context.sourceLocale, context.displayLocales, emptyMap(), "无法定位项目根目录")
         }
 
-        val repo = LocaleRepository(root, state.localesPath)
+        val repo = context.repository() ?: return Snapshot(
+            emptyList(), context.sourceLocale, context.displayLocales, emptyMap(), "无法定位项目根目录"
+        )
+
         val all = repo.scanLocales()
         if (all.isEmpty()) {
-            return Snapshot(emptyList(), state.sourceLocale, state.displayLocales, emptyMap())
+            val warning = "未找到语言包。当前配置：路径 ${context.localesPath} + 模式 ${context.pathMatcher}"
+            return Snapshot(emptyList(), context.sourceLocale, context.displayLocales, emptyMap(), warning)
         }
 
-        /**
-         * 挑选基准语言。
-         *
-         * 按优先级依次尝试：配置指定 → 含最多key 的语言 → 列表首个。
-         * 刻意**不简单取字母序首个** —— 目录名排序把 `ar`（阿拉伯语）排在最前，
-         * 一旦配置里的源语言写错或未配置，基准就变成阿拉伯语，
-         * 整张表会以阿拉伯语为原文显示，看起来"全是译文但key 对不上"。
-         * 用 key 数量做兜底更稳：源语言通常是覆盖最全的那个。
-         */
-        fun pickSource(
-            configured: String,
-            locales: List<com.up3d.i18n.locale.LocaleKeys>,
-        ): String? {
-            locales.firstOrNull { it.locale == configured }?.let { return it.locale }
-            return locales.maxByOrNull { it.keys.size }?.locale ?: locales.firstOrNull()?.locale
-        }
+        val sourceLocale = pickSource(context.sourceLocale, all) ?: all.first().locale
 
-        val sourceLocale = pickSource(state.sourceLocale, all) ?: all.first().locale
-        // 源语言外的语言按字母序排列，但把配置里指定的 displayLocales 提到最前，
-        // 保证用户最关心的语言出现在左侧前几列，不必横向滚动去找。
-        val preferred = state.displayLocales.filter { it != sourceLocale }
+        // 配置里指定的语言排前面，其余按字母序，减少横向滚动
+        val preferred = context.displayLocales.filter { it != sourceLocale && all.any { l -> l.locale == it } }
         val rest = all.map { it.locale }
             .filter { it != sourceLocale && !preferred.contains(it) }
             .sorted()
         val displayLocales = preferred + rest
 
         // 取所有语言的 key 并集作为行集合：任何语言里出现过的 key 都要列出来，
-        // 否则「某语言多出一个 key」这类问题在表里根本看不见。
+        // 否则「某语言多出一个 key」这类问题在表里根本看不见
         val allKeys = LinkedHashSet<String>()
         all.forEach { allKeys += it.keys }
 
@@ -120,7 +118,14 @@ class I18nPanelService(private val project: Project) {
             item.locale to (done to total)
         }
 
-        return Snapshot(rows, sourceLocale, displayLocales, progress)
+        // 源语言没配对时给出提示，避免用户对着"整表都是原文"的界面一头雾水
+        val warning = if (all.none { it.locale == context.sourceLocale }) {
+            "配置指定的源语言「${context.sourceLocale}」不存在，当前改用「${Flags.displayName(sourceLocale)}」作为基准。"
+        } else {
+            ""
+        }
+
+        return Snapshot(rows, sourceLocale, displayLocales, progress, warning)
     }
 }
 
@@ -147,6 +152,7 @@ class I18nToolWindowFactory : ToolWindowFactory {
             if (toolWindow.isDisposed) return@subscribe
             panel.setLocales(snapshot.sourceLocale, snapshot.displayLocales)
             panel.setRows(snapshot.rows)
+            panel.setStatus(snapshot.warning)
         }
 
         Disposer.register(toolWindow.disposable) { unsubscribe() }

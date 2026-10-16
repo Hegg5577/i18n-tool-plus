@@ -23,43 +23,66 @@ data class LocaleReport(
     val isConsistent: Boolean get() = missing.isEmpty() && extra.isEmpty()
 }
 
+/** key 在语言包里的组织形式。 */
+enum class KeyStyle {
+    /** 嵌套 JSON：`{"a":{"b":"x"}}` 对应 key `a.b`。 */
+    NESTED,
+
+    /** 单层 JSON：key 原样作为顶层字段名，`{"a.b":"x"}` 的 key 就是 `a.b`。 */
+    FLAT,
+
+    /** 两种都支持：查找时先试整体 key，再试点号路径展开。 */
+    AUTO;
+
+    companion object {
+        fun from(name: String?): KeyStyle = when (name?.lowercase()) {
+            "flat" -> FLAT
+            "auto" -> AUTO
+            else -> NESTED
+        }
+    }
+}
+
 /**
- * 语言包仓库：读取 `{localesDir}/{locale}/index.json` 并做结构比对。
+ * 语言包仓库：读取语言包并做结构比对。
  *
  * 刻意不依赖任何 IDE API —— 纯文件操作，便于单元测试。
+ *
+ * 路径与 key 风格全部由构造参数决定，不再硬编码：
+ * - [localesDir] 语言包根目录
+ * - [pathMatcher] 语言包文件名的匹配模式，支持 `{locale}` / `{namespace}` / `{file}`
+ * - [keyStyle] key 是嵌套展开还是平铺
  */
 class LocaleRepository(
     private val projectRoot: File,
     private val localesDir: String = DEFAULT_LOCALES_DIR,
+    private val pathMatcher: String = PathMatcher.DEFAULT_PATTERN,
+    private val keyStyle: KeyStyle = KeyStyle.NESTED,
+    private val fileName: String = DEFAULT_FILE_NAME,
 ) {
     companion object {
         const val DEFAULT_LOCALES_DIR = "src/i18n/locales"
-        const val LOCALE_FILE_NAME = "index.json"
+        const val DEFAULT_FILE_NAME = "index.json"
     }
 
-    /** 扫描目录下所有语言包，按其目录名排序。 */
-    fun scanLocales(): List<LocaleKeys> {
-        val dir = File(projectRoot, localesDir)
-        if (!dir.isDirectory) return emptyList()
+    private val matcher = PathMatcher(pathMatcher, fileName)
 
-        return dir.listFiles { f -> f.isDirectory }
-            .orEmpty()
-            .sortedBy { it.name }
-            .mapNotNull { localeDir ->
-                val file = File(localeDir, LOCALE_FILE_NAME)
-                if (!file.isFile) return@mapNotNull null
-                LocaleKeys(localeDir.name, file, parseKeys(file))
-            }
-    }
+    /** 扫描所有语言包。路径布局完全由 pathMatcher 决定。 */
+    fun scanLocales(): List<LocaleKeys> =
+        matcher.resolve(File(projectRoot, localesDir)).mapNotNull { resolved ->
+            val keys = runCatching { parseKeys(resolved.file) }.getOrNull() ?: return@mapNotNull null
+            LocaleKeys(resolved.locale, resolved.file, keys)
+        }
 
     /**
      * 以 [sourceLocale] 为基准，比对其余语言的 key 完整性。
-     * 基准语言缺失时退化为列表中的第一个语言。
+     * 基准语言缺失时退化为 key 最多的语言（而非字母序首个 —— 那可能是阿拉伯语等
+     * 恰好排在前面的语言，导致整份报告以错误的原文为基准）。
      */
     fun buildReport(sourceLocale: String = "en"): LocaleReport {
         val all = scanLocales()
         val source = all.firstOrNull { it.locale == sourceLocale }
-            ?: all.firstOrNull()
+            ?: all.maxByOrNull { it.keys.size }
             ?: return LocaleReport(emptyList(), emptyMap(), emptyMap())
 
         val missing = LinkedHashMap<String, List<String>>()
@@ -78,18 +101,30 @@ class LocaleRepository(
 
     /**
      * 读取某语言的 `key -> 原文` 映射（只取字符串叶子，且排除空字符串）。
-     * 批量翻译时用它取得待翻译的英文原文。
+     * 批量翻译时用它取得待翻译的原文。
      */
     fun valuesOf(locale: String): Map<String, String> {
-        val file = File(File(projectRoot, localesDir), "$locale/${LOCALE_FILE_NAME}")
-        if (!file.isFile) return emptyMap()
+        val file = localeFile(locale) ?: return emptyMap()
         return runCatching {
             flattenValues(JsonParser.parseString(file.readText()).asJsonObject)
         }.getOrDefault(emptyMap())
     }
 
+    /** 某语言的语言包文件；路径布局不符模式时返回 null。 */
+    fun localeFile(locale: String): File? =
+        scanLocales().firstOrNull { it.locale == locale }?.file
+
     private fun flattenValues(obj: JsonObject, prefix: String = ""): Map<String, String> {
         val result = LinkedHashMap<String, String>()
+
+        // 平铺模式：顶层字段名本身就是完整 key，不再往下拼接
+        if (keyStyle == KeyStyle.FLAT) {
+            for ((name, value) in obj.entrySet()) {
+                if (value.isJsonPrimitive) result[name] = value.asString
+            }
+            return result
+        }
+
         for ((name, value) in obj.entrySet()) {
             val key = if (prefix.isEmpty()) name else "$prefix.$name"
             when {
@@ -100,27 +135,6 @@ class LocaleRepository(
         return result
     }
 
-    /** 单个语言的语言包文件。 */
-    fun localeFile(locale: String): File =
-        File(File(projectRoot, localesDir), "$locale/${LOCALE_FILE_NAME}")
-
     private fun parseKeys(file: File): Set<String> =
-        flatten(JsonParser.parseString(file.readText()).asJsonObject)
-
-    /**
-     * 将嵌套 JSON 展平为点号 key：
-     * `{"common":{"cancel":"取消"}}` -> `common.cancel`
-     */
-    private fun flatten(obj: JsonObject, prefix: String = ""): Set<String> {
-        val result = LinkedHashSet<String>()
-        for ((name, value) in obj.entrySet()) {
-            val key = if (prefix.isEmpty()) name else "$prefix.$name"
-            if (value.isJsonObject) {
-                result += flatten(value.asJsonObject, key)
-            } else {
-                result += key
-            }
-        }
-        return result
-    }
+        flattenValues(JsonParser.parseString(file.readText()).asJsonObject).keys
 }

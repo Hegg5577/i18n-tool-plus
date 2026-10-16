@@ -28,6 +28,12 @@
         <codeInsight.declarativeInlayProviderFactory
                 implementation="com.up3d.i18n.editor.I18nInlayProviderFactory"/>
 
+        <!-- 设置页：语言包路径、路径模式、源语言、匹配正则全部可配。 -->
+        <projectConfigurable parentId="tools"
+                             instance="com.up3d.i18n.settings.I18nConfigurable"
+                             id="com.up3d.i18n.settings"
+                             displayName="i18n Helper"/>
+
         <!-- 侧边栏 i18n 面板：多语言对照表 + 翻译进度。 -->
         <toolWindow id="i18n-helper"
                     anchor="right"
