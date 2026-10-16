@@ -5,8 +5,15 @@
     <vendor>UP3D</vendor>
 
     <description><![CDATA[
-    WebStorm 侧的 i18n 辅助插件，面向 i18next 单文件语言包结构。<br/>
-    能力规划：语言包结构校验、<code>t('key')</code> 跳转与预览、缺失翻译检测、批量机器翻译。
+    前端国际化（i18n）辅助插件，对齐 i18n-ally-next 的核心体验。<br/>
+    支持框架：i18next、vue-i18n、react-i18next、i18n-js。<br/>
+    覆盖 js / jsx / ts / tsx / vue / html。
+    <ul>
+      <li>行内译文提示：<code>t('key')</code> 后直接显示译文</li>
+      <li>侧边栏多语言对照表：按语言分列，区分已翻译 / 空 / 缺失 / 过期</li>
+      <li>语言包一致性扫描与诊断</li>
+      <li>批量机器翻译（Google 免费端点，无需密钥）</li>
+    </ul>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
@@ -20,9 +27,28 @@
              覆盖 js / jsx / ts / tsx / vue / html，语言清单见 I18nInlayProviderFactory。 -->
         <codeInsight.declarativeInlayProviderFactory
                 implementation="com.up3d.i18n.editor.I18nInlayProviderFactory"/>
+
+        <!-- 侧边栏 i18n 面板：多语言对照表 + 翻译进度。 -->
+        <toolWindow id="i18n-helper"
+                    anchor="right"
+                    factoryClass="com.up3d.i18n.ui.I18nToolWindowFactory"/>
     </extensions>
 
     <actions>
+        <action id="com.up3d.i18n.ShowPanel"
+                class="com.up3d.i18n.actions.ShowPanelAction"
+                text="i18n: 打开翻译面板"
+                description="在侧边栏打开多语言翻译对照表">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action id="com.up3d.i18n.RefreshPanel"
+                class="com.up3d.i18n.actions.RefreshPanelAction"
+                text="i18n: 刷新翻译面板"
+                description="重新扫描语言包并刷新侧边栏表格">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
         <action id="com.up3d.i18n.ScanLocales"
                 class="com.up3d.i18n.actions.ScanLocalesAction"
                 text="i18n: 扫描语言包一致性"
@@ -40,7 +66,7 @@
         <action id="com.up3d.i18n.BatchTranslate"
                 class="com.up3d.i18n.actions.BatchTranslateAction"
                 text="i18n: 批量翻译缺失文案"
-                description="以源语言(en)为准，把各语言缺失的 key 机器翻译补齐，写入前先预览确认">
+                description="以源语言为准，把各语言缺失的 key 机器翻译补齐，写入前先预览确认">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
     </actions>
