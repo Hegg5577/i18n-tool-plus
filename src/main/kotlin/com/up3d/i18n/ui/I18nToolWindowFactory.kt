@@ -62,10 +62,31 @@ class I18nPanelService(private val project: Project) {
             return Snapshot(emptyList(), state.sourceLocale, state.displayLocales, emptyMap())
         }
 
-        // 源语言不存在时退化为列表首个，保证总有基准可用
-        val sourceLocale = all.firstOrNull { it.locale == state.sourceLocale }?.locale
-            ?: all.first().locale
-        val displayLocales = all.map { it.locale }.filter { it != sourceLocale }
+        /**
+         * 挑选基准语言。
+         *
+         * 按优先级依次尝试：配置指定 → 含最多key 的语言 → 列表首个。
+         * 刻意**不简单取字母序首个** —— 目录名排序把 `ar`（阿拉伯语）排在最前，
+         * 一旦配置里的源语言写错或未配置，基准就变成阿拉伯语，
+         * 整张表会以阿拉伯语为原文显示，看起来"全是译文但key 对不上"。
+         * 用 key 数量做兜底更稳：源语言通常是覆盖最全的那个。
+         */
+        fun pickSource(
+            configured: String,
+            locales: List<com.up3d.i18n.locale.LocaleKeys>,
+        ): String? {
+            locales.firstOrNull { it.locale == configured }?.let { return it.locale }
+            return locales.maxByOrNull { it.keys.size }?.locale ?: locales.firstOrNull()?.locale
+        }
+
+        val sourceLocale = pickSource(state.sourceLocale, all) ?: all.first().locale
+        // 源语言外的语言按字母序排列，但把配置里指定的 displayLocales 提到最前，
+        // 保证用户最关心的语言出现在左侧前几列，不必横向滚动去找。
+        val preferred = state.displayLocales.filter { it != sourceLocale }
+        val rest = all.map { it.locale }
+            .filter { it != sourceLocale && !preferred.contains(it) }
+            .sorted()
+        val displayLocales = preferred + rest
 
         // 取所有语言的 key 并集作为行集合：任何语言里出现过的 key 都要列出来，
         // 否则「某语言多出一个 key」这类问题在表里根本看不见。

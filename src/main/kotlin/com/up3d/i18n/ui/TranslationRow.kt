@@ -17,12 +17,7 @@ data class TranslationRow(
     /**
      * 该行在某语言下的展示状态。
      *
-     * 源语言列传[sourceLocale] 进来时不做比对 —— 它是基准，
-     * 否则整列都会显示"已过期"或"缺失"，等于没有基准。
+     * 只看译文是否存在，不比对译文与原文是否一致 —— 见[TranslationStatus.of]的说明。
      */
-    fun status(locale: String, sourceLocale: String): TranslationStatus {
-        val target = values[locale]
-        val source = if (locale == sourceLocale) null else sourceText
-        return TranslationStatus.of(target, source)
-    }
+    fun status(locale: String): TranslationStatus = TranslationStatus.of(values[locale])
 }

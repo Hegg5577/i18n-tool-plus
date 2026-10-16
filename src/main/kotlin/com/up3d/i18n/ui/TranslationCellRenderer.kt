@@ -37,7 +37,7 @@ internal class TranslationCellRenderer : TableCellRenderer {
         val data = value as? CellData
         val locale = data?.locale.orEmpty()
         val isSource = data != null && locale == sourceLocale
-        val status = data?.row?.status(locale, sourceLocale) ?: TranslationStatus.MISSING
+        val status = data?.row?.status(locale) ?: TranslationStatus.MISSING
 
         val translated = data?.row?.values?.get(locale).orEmpty()
         val text = when (status) {

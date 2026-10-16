@@ -113,7 +113,7 @@ class TranslationTablePanel(
         override fun getColumnCount(): Int = columns.size
 
         override fun getColumnName(column: Int): String =
-            if (column == 0) "Key" else "${Flags.emoji(localeOrder[column])} ${columns[column]}"
+            if (column == 0) "Key" else columns[column - 1]
 
         /** 第 0 列返回 String，其余返回 CellData 以走自定义渲染器。 */
         override fun getColumnClass(columnIndex: Int): Class<*> =
