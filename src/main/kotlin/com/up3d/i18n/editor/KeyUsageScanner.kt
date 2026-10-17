@@ -53,12 +53,14 @@ object KeyUsageScanner {
      *
      * @param customPatterns 用户在设置里配置的正则，可含 `{key}` 占位符。
      *        非空时**只**用这些规则（用户既然指定了，就不该再混入内置规则干扰结果）。
-     * @param builtinPatterns 内置框架的正则，仅在用户未配置时使用。
+     * @param builtinPatterns 内置规则，仅在用户未配置时使用。
+     *        默认取 [DefaultPatterns.ALL] —— 不设成空列表，否则调用方一忘传参就只剩兜底正则，
+     *        `$t('a')`、`i18n.t('a')` 这些写法全部识别不到。
      */
     fun scan(
         text: String,
         customPatterns: List<String> = emptyList(),
-        builtinPatterns: List<Regex> = emptyList(),
+        builtinPatterns: List<Regex> = DefaultPatterns.ALL,
     ): Sequence<Usage> {
         if (isTooLarge(text.length)) return emptySequence()
 
@@ -78,7 +80,7 @@ object KeyUsageScanner {
      */
     fun compileRules(
         customPatterns: List<String>,
-        builtinPatterns: List<Regex> = emptyList(),
+        builtinPatterns: List<Regex> = DefaultPatterns.ALL,
     ): List<Rule> {
         if (customPatterns.isNotEmpty()) {
             return customPatterns.mapNotNull { raw ->

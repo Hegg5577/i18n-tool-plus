@@ -13,91 +13,124 @@ import java.io.File
  * - `{file}` 语言包文件名，取自配置，默认 `index.json`
  *
  * 常见示例：
- * - `{locale}/{file}`→ `locales/en/index.json`（每语言一目录）
- * - `{locale}.json`          → `locales/en.json`（每语言一文件）
+ * - `{locale}/{file}`           → `locales/en/index.json`（每语言一目录）
+ * - `{locale}.json`             → `locales/en.json`（每语言一文件）
  * - `{locale}/{namespace}.json` → `locales/en/common.json`
  * - `{namespace}.{locale}.json` → `locales/common.en.json`
  */
-class PathMatcher(val pattern: String, val defaultFileName: String = "index.json") {
+class PathMatcher(
+    val pattern: String,
+    private val defaultFileName: String = LocaleRepository.DEFAULT_FILE_NAME,
+) {
 
-    private val segments: List<String> = pattern.trim().split('/').filter { it.isNotBlank() }
+    private val segments: List<String> =
+        pattern.trim().split('/').map { it.trim() }.filter { it.isNotEmpty() }
 
     /** 模式是否含 `{locale}` 占位符。不含则无法自动发现语言。 */
-    val usesLocale: Boolean = pattern.contains(LOCALE_TOKEN)
+    val usesLocale: Boolean get() = pattern.contains(LOCALE_TOKEN)
 
     /** 模式是否含 `{namespace}` 占位符。 */
-    val usesNamespace: Boolean = pattern.contains(NAMESPACE_TOKEN)
+    val usesNamespace: Boolean get() = pattern.contains(NAMESPACE_TOKEN)
 
     /**
      * 枚举该模式下所有语言包文件。
      *
-     * 逐层下钻目录树：片段含 `{locale}` 时，该层的**子目录名**即为候选语言；
-     * 片段含 `{namespace}` 时，该层的**文件名**即为语言包；其余片段按字面量匹配。
-     * 最后一段若不是 `{file}`，说明模式自带扩展名（如 `{locale}.json`），
-     * 此时 `{locale}` 层拿到的是目录，需要再拼上文件名。
+     * 做法是**逐层下钻目录树**，并且把「当前已知的语言」跟着路径一起传递：
+     * - `{locale}` 作为独立路径段 → 该层的子目录名即语言，记录后继续下钻
+     * - `{file}` / `{namespace}` → 该层的 json 文件即语言包
+     * - `{locale}.json` 这类「占位符 + 扩展名」 → 目录名是语言，文件名按模式拼出
+     * - 普通段 → 按字面量匹配
+     *
+     * 关键点：只有**整个模式走完**才返回结果。之前的实现在遇到 `{locale}` 时
+     * 就提前 return，导致默认模式 `{locale}/{file}` 里的 `{file}` 永远处理不到，
+     * 最终返回空列表 —— 表现为「一个国际化都显示不出来」。
      */
     fun resolve(root: File): List<ResolvedLocale> {
         if (!root.isDirectory || segments.isEmpty()) return emptyList()
 
-        var current: List<File> = listOf(root)
-        // 每个语言包文件记录它归属的语言，填在遇到 {locale} 的那一层
-        val out = ArrayList<ResolvedLocale>()
-        var locale: String? = null
+        // 每层下钻的结果：语言（可能为 null）+ 当前目录
+        var level: List<Level> = listOf(Level(null, root))
 
-        for (part in segments) {
-            when {
-                part.contains(LOCALE_TOKEN) -> {
-                    // 该层的子目录名即语言；若这一层同时是最后一段，则目录内还需再取文件
-                    val dirs: List<File> = current.flatMap { it.listFiles { f: File -> f.isDirectory }?.toList().orEmpty() }
-                    val isLast = part === segments.last()
-                    if (isLast && !endsWithFileName(part)) {
-                        // 形如 {locale} ——目录本身就是语言，需在目录内按 {file} 规则找文件
-                        for (dir in dirs) {
-                            val file = pickFileIn(dir, defaultFileName)
-                            if (file != null) out += ResolvedLocale(dir.name, file)
+        for (segment in segments) {
+            val next = when {
+                // `{locale}.json`：当前目录里直接躺着一批 `xx.json` 文件，
+                // 语言来自文件名本身（en.json → en），不需要有子目录
+                segment.startsWith(LOCALE_TOKEN) && hasExtension(segment) -> {
+                    level.flatMap { (_, dir) ->
+                        jsonFiles(dir).mapNotNull { file ->
+                            val name = segment.removePrefix(LOCALE_TOKEN).removePrefix(".")
+                            // 只保留与模式后缀一致的文件，避免把common.json 也当成语言
+                            if (name.isNotEmpty() && !file.name.endsWith(name, ignoreCase = true)) return@mapNotNull null
+                            Level(localeFromFileName(file), file)
                         }
-                    } else {
-                        // 形如 {locale}.json ——目录是语言，再拼出文件名
-                        for (dir in dirs) {
-                            out += ResolvedLocale(dir.name, File(dir, expandFileName(part, dir.name)))
-                        }
-                    }
-                    return out.filter { it.file.isFile }.sortedBy { it.locale }
-                }
-
-                part == NAMESPACE_TOKEN || part == FILE_TOKEN -> {
-                    // 该层的文件名即语言包，语言沿用外层记录的
-                    current = current.flatMap { it.listFiles { f: File -> f.isFile }?.toList().orEmpty() }
-                    val l = locale ?: return emptyList()
-                    return current.mapNotNull { f ->
-                        ResolvedLocale(l, f).takeIf { it.file.isFile }
                     }
                 }
 
-                else -> {
-                    current = current.mapNotNull { File(it, part).takeIf { f -> f.exists() } }
-                    if (current.isEmpty()) return emptyList()
+                // `{namespace}.json`：同样是当前目录的文件，语言沿用外层记录的
+                segment.startsWith(NAMESPACE_TOKEN) && hasExtension(segment) -> {
+                    level.flatMap { (locale, dir) ->
+                        val suffix = segment.removePrefix(NAMESPACE_TOKEN).removePrefix(".")
+                        jsonFiles(dir)
+                            .filter { suffix.isEmpty() || it.name.endsWith(suffix, ignoreCase = true) }
+                            .map { Level(locale, it) }
+                    }
+                }
+
+                // 独立的 `{locale}` 段：子目录名即语言，记录后继续往下走
+                segment == LOCALE_TOKEN -> level.flatMap { (_, dir) ->
+                    childDirs(dir).map { Level(it.name, it) }
+                }
+
+                // `{namespace}` 段：该层的 json 文件即语言包
+                segment == NAMESPACE_TOKEN -> level.flatMap { (locale, dir) ->
+                    jsonFiles(dir).map { Level(locale, it) }
+                }
+
+                // `{file}` 段：在当前目录里取配置的文件名；取不到就退回第一个 json
+                segment == FILE_TOKEN -> level.flatMap { (locale, dir) ->
+                    val exact = File(dir, defaultFileName)
+                    val file = if (exact.isFile) exact else jsonFiles(dir).firstOrNull()
+                    if (file == null) emptyList() else listOf(Level(locale, file))
+                }
+
+                // 普通路径段：按字面量下钻
+                else -> level.mapNotNull { (locale, dir) ->
+                    File(dir, segment).takeIf { it.exists() }?.let { Level(locale, it) }
                 }
             }
+
+            if (next.isEmpty()) return emptyList()
+            level = next
         }
-        return emptyList()
+
+        return level
+            .filter { it.dir.isFile }
+            .map { (locale, file) -> ResolvedLocale(locale ?: localeFromFileName(file), file) }
+            .distinctBy { it.locale to it.file.path }
+            .sortedBy { it.locale }
     }
 
-    /** 该片段是否自带文件名（末尾是 `{file}` 或带扩展名）。 */
-    private fun endsWithFileName(part: String): Boolean =
-        part == FILE_TOKEN || part.substringAfterLast('/').contains('.')
+    /** 下钻过程中的状态：已知语言（未定则为 null）+ 当前路径。 */
+    private data class Level(val locale: String?, val dir: File)
 
-    /** 片段含 `{locale}` 且自带扩展名时，展开成实际文件名。 */
-    private fun expandFileName(part: String, locale: String): String =
-        part.replace(LOCALE_TOKEN, locale)
+    /** 该片段自带扩展名（说明它描述的是文件名而非目录名）。 */
+    private fun hasExtension(segment: String): Boolean =
+        segment.substringAfterLast('/').substringAfterLast('.', "").isNotEmpty()
 
-    /** 在目录内按文件名取语言包，取不到则取第一个 json 文件。 */
-    private fun pickFileIn(dir: File, fileName: String): File? {
-        val exact = File(dir, fileName)
-        if (exact.isFile) return exact
-        return dir.listFiles { f: File ->
-            f.isFile && f.name.endsWith(".json", ignoreCase = true)
-        }?.firstOrNull()
+    private fun childDirs(dir: File): List<File> =
+        dir.listFiles { f: File -> f.isDirectory }?.toList().orEmpty()
+
+    private fun jsonFiles(dir: File): List<File> =
+        dir.listFiles { f: File -> f.isFile && f.name.endsWith(".json", ignoreCase = true) }
+            ?.toList()
+            .orEmpty()
+
+    /** 模式里没写明语言时，从文件名里推断：`en.json` → `en`，`common.en.json` → `en`。 */
+    private fun localeFromFileName(file: File): String {
+        val name = file.name.removeSuffix(".json")
+        // 取最后一段：common.en → en
+        val candidate = name.substringAfterLast('.', name)
+        return candidate.ifBlank { name }
     }
 
     companion object {
