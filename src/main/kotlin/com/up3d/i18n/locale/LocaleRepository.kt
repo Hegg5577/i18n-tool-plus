@@ -105,9 +105,14 @@ class LocaleRepository(
      */
     fun valuesOf(locale: String): Map<String, String> {
         val file = localeFile(locale) ?: return emptyMap()
-        return runCatching {
-            flattenValues(JsonParser.parseString(file.readText()).asJsonObject)
-        }.getOrDefault(emptyMap())
+        // 按扩展名分派：JSON 走 gson，JS 走正则规整后的解析器
+        return if (JsLocaleParser.supports(file)) {
+            JsLocaleParser.parse(file, keyStyle)
+        } else {
+            runCatching {
+                flattenValues(JsonParser.parseString(file.readText()).asJsonObject)
+            }.getOrDefault(emptyMap())
+        }
     }
 
     /** 某语言的语言包文件；路径布局不符模式时返回 null。 */
@@ -135,6 +140,15 @@ class LocaleRepository(
         return result
     }
 
-    private fun parseKeys(file: File): Set<String> =
-        flattenValues(JsonParser.parseString(file.readText()).asJsonObject).keys
+    private fun parseKeys(file: File): Set<String> = valuesOfFile(file).keys
+
+    /** 按扩展名分派的读取。 */
+    private fun valuesOfFile(file: File): Map<String, String> =
+        if (JsLocaleParser.supports(file)) {
+            JsLocaleParser.parse(file, keyStyle)
+        } else {
+            runCatching {
+                flattenValues(JsonParser.parseString(file.readText()).asJsonObject)
+            }.getOrDefault(emptyMap())
+        }
 }

@@ -15,7 +15,13 @@ import javax.swing.table.TableCellRenderer
  * 翻译对照表的单元格渲染器。
  *
  * 状态标记 + 译文文本，前景色随状态变化：
- * 已翻译与源语言用正常色，空/缺失/过期用灰色，一眼可辨。
+ * 已翻译与源语言用正常色，空/缺失用灰色，一眼可辨。
+ *
+ * **必须同时处理 String 与 [CellData]**：JTable 按「列的声明类型」查找渲染器，
+ * 而 Swing 里 `Object` 是所有类型的父类，所以注册一次 `Any::class.java` 渲染器后
+ * **所有列都会走这里**，包括 Key 列（值是 String）。
+ * 之前只在 `as? CellData` 失败时一律返回 `<缺失>`，导致 Key 列整列显示「缺失」——
+ * 看起来像语言包全空，实际是渲染器类型不匹配。
  *
  * 刻意只用最基础的 Swing 组件组装，不依赖 `SimpleTextAttributes` /
  * `JBUI.CurrentTheme` 等平台内部 API —— 这些在不同平台版本间签名会变，
@@ -34,20 +40,29 @@ internal class TranslationCellRenderer : TableCellRenderer {
         row: Int,
         column: Int,
     ): Component {
-        val data = value as? CellData
-        val locale = data?.locale.orEmpty()
-        val isSource = data != null && locale == sourceLocale
-        val status = data?.row?.status(locale) ?: TranslationStatus.MISSING
+        // Key 列：值就是 key 本身，原样显示，不加状态标记
+        if (value !is CellData) {
+            return JLabel(value?.toString().orEmpty()).apply {
+                font = UIUtil.getLabelFont()
+                foreground = when {
+                    isSelected && table != null -> table.selectionForeground
+                    else -> JBColor.foreground()
+                }
+                border = JBUI.Borders.empty(2, 4)
+            }
+        }
 
-        val translated = data?.row?.values?.get(locale).orEmpty()
+        val isSource = value.locale == sourceLocale
+        val status = value.row.status(value.locale)
+
         val text = when (status) {
             TranslationStatus.MISSING -> "<缺失>"
             TranslationStatus.EMPTY -> "<空>"
-            else -> translated
+            else -> value.row.values[value.locale].orEmpty()
         }
         val prefix = if (isSource) "" else "${status.marker} "
 
-        // 源语言列与已翻译项用正常色；空/缺失/过期用灰色
+        // 源语言列与已翻译项用正常色；空/缺失用灰色
         val dimmed = !isSource && status != TranslationStatus.TRANSLATED
 
         val label = JLabel(prefix + text).apply {

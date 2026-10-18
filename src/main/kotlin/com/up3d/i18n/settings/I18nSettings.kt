@@ -82,6 +82,9 @@ class I18nSettings : PersistentStateComponent<I18nSettings.State> {
 
         /** 批量翻译时是否覆盖已有译文。默认关，避免误伤人工翻译。 */
         var overrideExisting: Boolean = false,
+
+        /** 扫描源码的目录（逗号分隔，相对项目根）。用于「缺失检测」比对 key 使用情况。 */
+        var sourceDirs: MutableList<String> = mutableListOf("src"),
     )
 
     private var state = State()

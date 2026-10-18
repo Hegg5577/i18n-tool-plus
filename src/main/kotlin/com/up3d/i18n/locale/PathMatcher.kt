@@ -56,11 +56,16 @@ class PathMatcher(
                 // `{locale}.json`：当前目录里直接躺着一批 `xx.json` 文件，
                 // 语言来自文件名本身（en.json → en），不需要有子目录
                 segment.startsWith(LOCALE_TOKEN) && hasExtension(segment) -> {
+                    val ext = segment.substringAfterLast('.', "")
                     level.flatMap { (_, dir) ->
-                        jsonFiles(dir).mapNotNull { file ->
-                            val name = segment.removePrefix(LOCALE_TOKEN).removePrefix(".")
-                            // 只保留与模式后缀一致的文件，避免把common.json 也当成语言
-                            if (name.isNotEmpty() && !file.name.endsWith(name, ignoreCase = true)) return@mapNotNull null
+                        dataFiles(dir).mapNotNull { file ->
+                            // 按**扩展名精确**匹配，不能用 endsWith：
+                            // `endsWith("js")` 会把 `xx.mjs` 也当成 js，endsWith("json") 同理
+                            if (ext.isNotEmpty() && !file.extension.equals(ext, ignoreCase = true)) {
+                                return@mapNotNull null
+                            }
+                            // index.js 是 vue-i18n 的聚合入口，不是语言包
+                            if (isAggregateFile(file.name)) return@mapNotNull null
                             Level(localeFromFileName(file), file)
                         }
                     }
@@ -70,7 +75,7 @@ class PathMatcher(
                 segment.startsWith(NAMESPACE_TOKEN) && hasExtension(segment) -> {
                     level.flatMap { (locale, dir) ->
                         val suffix = segment.removePrefix(NAMESPACE_TOKEN).removePrefix(".")
-                        jsonFiles(dir)
+                        dataFiles(dir)
                             .filter { suffix.isEmpty() || it.name.endsWith(suffix, ignoreCase = true) }
                             .map { Level(locale, it) }
                     }
@@ -83,13 +88,13 @@ class PathMatcher(
 
                 // `{namespace}` 段：该层的 json 文件即语言包
                 segment == NAMESPACE_TOKEN -> level.flatMap { (locale, dir) ->
-                    jsonFiles(dir).map { Level(locale, it) }
+                    dataFiles(dir).map { Level(locale, it) }
                 }
 
                 // `{file}` 段：在当前目录里取配置的文件名；取不到就退回第一个 json
                 segment == FILE_TOKEN -> level.flatMap { (locale, dir) ->
                     val exact = File(dir, defaultFileName)
-                    val file = if (exact.isFile) exact else jsonFiles(dir).firstOrNull()
+                    val file = if (exact.isFile) exact else dataFiles(dir).firstOrNull()
                     if (file == null) emptyList() else listOf(Level(locale, file))
                 }
 
@@ -120,20 +125,44 @@ class PathMatcher(
     private fun childDirs(dir: File): List<File> =
         dir.listFiles { f: File -> f.isDirectory }?.toList().orEmpty()
 
-    private fun jsonFiles(dir: File): List<File> =
-        dir.listFiles { f: File -> f.isFile && f.name.endsWith(".json", ignoreCase = true) }
-            ?.toList()
-            .orEmpty()
+    /** 可作为语言包的数据文件：JSON 与 JS 都要，vue-i18n 生态常用 `.js` 语言包。 */
+    private fun dataFiles(dir: File): List<File> =
+        dir.listFiles { f: File ->
+            f.isFile && f.extension.lowercase() in DATA_EXTENSIONS
+        }?.toList().orEmpty()
 
-    /** 模式里没写明语言时，从文件名里推断：`en.json` → `en`，`common.en.json` → `en`。 */
+    /**
+     * 模式里没写明语言时，从文件名里推断。
+     *
+     * `en.js` → `en`，`common.en.json` → `en`。
+     * 必须剥掉**任意**数据扩展名，不能只剥 `.json` —— 早期只写 `removeSuffix(".json")`，
+     * 结果所有 `.js` 文件都推断出语言 `js`，11 个语言包全被标成同一个 `js`。
+     */
     private fun localeFromFileName(file: File): String {
-        val name = file.name.removeSuffix(".json")
+        val base = file.name.substringBeforeLast('.', file.name)
         // 取最后一段：common.en → en
-        val candidate = name.substringAfterLast('.', name)
-        return candidate.ifBlank { name }
+        return base.substringAfterLast('.', base).ifBlank { base }
     }
 
     companion object {
+/**
+     * 可作为语言包的数据文件扩展名。
+     */
+    val DATA_EXTENSIONS = setOf("json", "js", "mjs", "cjs")
+
+        /**
+         * 聚合入口文件名，这些不是语言包。
+         *
+         * vue-i18n 项目常在语言包目录里放一个 `index.js`，它负责 import 并组装所有语言。
+         * 不排除的话，`index.js` 会被当成一个名为 `index` 的语言，
+         * 面板上多出一列空数据，还会因为它解析不出 key 而干扰「源语言」的判定。
+         */
+        private val AGGREGATE_NAMES = setOf("index", "index.js", "index.json", "i18n", "dictionaries")
+
+        /** 判断文件名是否为聚合入口而非语言包。 */
+        private fun isAggregateFile(fileName: String): Boolean =
+            fileName.substringBeforeLast('.') in AGGREGATE_NAMES
+
         /** 默认模式：每语言一个目录，目录内index.json 为该语言全部文案。 */
         const val DEFAULT_PATTERN = "{locale}/{file}"
 

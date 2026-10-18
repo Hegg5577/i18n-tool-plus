@@ -25,8 +25,22 @@ class I18nPanelService(private val project: Project) {
         val displayLocales: List<String>,
         /** locale -> (已翻译数, 总数)，用于进度概览。 */
         val progress: Map<String, Pair<Int, Int>>,
+        /** 代码里用到但语言包没定义的 key。 */
+        val missingKeys: List<MissingKey> = emptyList(),
+        /** 语言包定义了但代码里没用到。 */
+        val unusedKeys: List<String> = emptyList(),
+        /** 语言包定义的 key 总数 / 代码引用到的 key 总数。 */
+        val definedCount: Int = 0,
+        val usedCount: Int = 0,
         /** 配置或路径有问题时的提示信息，为空表示一切正常。 */
         val warning: String = "",
+    )
+
+    /** 一个缺失的 key 及其引用位置。 */
+    data class MissingKey(
+        val key: String,
+        /** 引用该 key 的文件（相对路径）。 */
+        val files: List<String>,
     )
 
     private val listeners = mutableListOf<(Snapshot) -> Unit>()
@@ -64,17 +78,25 @@ class I18nPanelService(private val project: Project) {
     private fun load(): Snapshot {
         val context = I18nContext.of(project)
         if (!context.isValid) {
-            return Snapshot(emptyList(), context.sourceLocale, context.displayLocales, emptyMap(), "无法定位项目根目录")
+            return Snapshot(
+                emptyList(), context.sourceLocale, context.displayLocales, emptyMap(),
+                warning = "无法定位项目根目录",
+            )
         }
 
+        val root = context.projectRoot!!
         val repo = context.repository() ?: return Snapshot(
-            emptyList(), context.sourceLocale, context.displayLocales, emptyMap(), "无法定位项目根目录"
+            emptyList(), context.sourceLocale, context.displayLocales, emptyMap(),
+            warning = "无法定位项目根目录",
         )
 
         val all = repo.scanLocales()
         if (all.isEmpty()) {
             val warning = "未找到语言包。当前配置：路径 ${context.localesPath} + 模式 ${context.pathMatcher}"
-            return Snapshot(emptyList(), context.sourceLocale, context.displayLocales, emptyMap(), warning)
+            return Snapshot(
+                emptyList(), context.sourceLocale, context.displayLocales, emptyMap(),
+                warning = warning,
+            )
         }
 
         val sourceLocale = pickSource(context.sourceLocale, all) ?: all.first().locale
@@ -118,6 +140,19 @@ class I18nPanelService(private val project: Project) {
             item.locale to (done to total)
         }
 
+        // 扫描代码里实际用到的 key，与语言包比对找出「缺失」与「多余」
+        val usage = runCatching {
+            com.up3d.i18n.locale.UsageScanner.analyze(
+                projectRoot = root,
+                localesDir = context.localesPath,
+                pathMatcher = context.pathMatcher,
+                keyStyle = context.keyStyle,
+                sourceDirs = context.sourceDirs.ifEmpty { com.up3d.i18n.locale.DEFAULT_SOURCE_DIRS },
+                extensions = context.supportedExtensions,
+                customPatterns = context.usageMatchRegex,
+            )
+        }.getOrNull()
+
         // 源语言没配对时给出提示，避免用户对着"整表都是原文"的界面一头雾水
         val warning = if (all.none { it.locale == context.sourceLocale }) {
             "配置指定的源语言「${context.sourceLocale}」不存在，当前改用「${Flags.displayName(sourceLocale)}」作为基准。"
@@ -125,7 +160,19 @@ class I18nPanelService(private val project: Project) {
             ""
         }
 
-        return Snapshot(rows, sourceLocale, displayLocales, progress, warning)
+        return Snapshot(
+            rows = rows,
+            sourceLocale = sourceLocale,
+            displayLocales = displayLocales,
+            progress = progress,
+            missingKeys = usage?.missing?.map { key ->
+                MissingKey(key, usage.usages[key]?.files.orEmpty())
+            }.orEmpty(),
+            unusedKeys = usage?.unused.orEmpty(),
+            definedCount = usage?.definedCount ?: 0,
+            usedCount = usage?.usedCount ?: 0,
+            warning = warning,
+        )
     }
 }
 
@@ -144,8 +191,13 @@ class I18nToolWindowFactory : ToolWindowFactory {
         val service = project.getService(I18nPanelService::class.java)
         val panel = TranslationTablePanel("en", emptyList())
 
-        val content = ContentFactory.getInstance().createContent(panel, "翻译", false)
+        val manager = ContentFactory.getInstance()
+        val content = manager.createContent(panel, "翻译对照", false)
         toolWindow.contentManager.addContent(content)
+
+        val missingPanel = MissingKeysPanel()
+        val missingContent = manager.createContent(missingPanel, "缺失检测", false)
+        toolWindow.contentManager.addContent(missingContent)
 
         val unsubscribe = service.subscribe { snapshot ->
             // ToolWindow 已关闭时不再重绘，避免对已 dispose 的组件操作
@@ -153,6 +205,12 @@ class I18nToolWindowFactory : ToolWindowFactory {
             panel.setLocales(snapshot.sourceLocale, snapshot.displayLocales)
             panel.setRows(snapshot.rows)
             panel.setStatus(snapshot.warning)
+            missingPanel.setData(
+                missing = snapshot.missingKeys.map { it.key to it.files },
+                unused = snapshot.unusedKeys,
+                definedCount = snapshot.definedCount,
+                usedCount = snapshot.usedCount,
+            )
         }
 
         Disposer.register(toolWindow.disposable) { unsubscribe() }

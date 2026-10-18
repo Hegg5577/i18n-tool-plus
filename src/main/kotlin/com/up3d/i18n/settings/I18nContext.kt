@@ -26,6 +26,7 @@ data class I18nContext(
     val annotationLocale: String,
     val fallbackToSource: Boolean,
     val overrideExisting: Boolean,
+    val sourceDirs: List<String>,
 ) {
     /** 行内提示实际使用的语言：优先配置项，其次首选显示语言，最后源语言。 */
     val effectiveAnnotationLocale: String
@@ -70,6 +71,7 @@ data class I18nContext(
                 annotationLocale = state.annotationLocale,
                 fallbackToSource = state.fallbackToSource,
                 overrideExisting = state.overrideExisting,
+                sourceDirs = state.sourceDirs.filter { it.isNotBlank() },
             )
         }
     }

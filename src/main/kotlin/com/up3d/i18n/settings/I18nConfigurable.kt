@@ -38,6 +38,7 @@ class I18nConfigurable(private val project: Project) : Configurable {
     private val displayLocalesField = JBTextField()
     private val extensionsField = JBTextField()
     private val namespaceDelimiterField = JBTextField()
+    private val sourceDirsField = JBTextField()
 
     private val keyStyleCombo = ComboBox(DefaultComboBoxModel(arrayOf("nested", "flat", "auto")))
 
@@ -90,6 +91,7 @@ class I18nConfigurable(private val project: Project) : Configurable {
             .addLabeledComponent(JBLabel("优先展示的语言（逗号分隔）"), displayLocalesField, 1, false)
             .addLabeledComponent(JBLabel("key 风格"), keyStyleCombo, 1, false)
             .addLabeledComponent(JBLabel("扫描的文件后缀（逗号分隔）"), extensionsField, 1, false)
+            .addLabeledComponent(JBLabel("源码目录（逗号分隔，用于缺失检测）"), sourceDirsField, 1, false)
             .addComponent(namespaceEnabled)
             .addLabeledComponent(JBLabel("命名空间分隔符"), namespaceDelimiterField, 1, false)
             .addSeparator()
@@ -119,6 +121,7 @@ class I18nConfigurable(private val project: Project) : Configurable {
         displayLocalesField.text = state.displayLocales.joinToString(",")
         keyStyleCombo.selectedItem = state.keyStyle
         extensionsField.text = state.supportedExtensions.joinToString(",")
+        sourceDirsField.text = state.sourceDirs.joinToString(",")
         namespaceEnabled.isSelected = state.namespaceEnabled
         namespaceDelimiterField.text = state.namespaceDelimiter
         inlineEnabled.isSelected = state.inlineAnnotationEnabled
@@ -137,6 +140,9 @@ class I18nConfigurable(private val project: Project) : Configurable {
         state.keyStyle = (keyStyleCombo.selectedItem as? String ?: "nested")
         state.supportedExtensions = splitList(extensionsField.text)
             .map { it.removePrefix(".") }
+            .toMutableList()
+        state.sourceDirs = splitList(sourceDirsField.text)
+            .ifEmpty { listOf("src") }
             .toMutableList()
         state.namespaceEnabled = namespaceEnabled.isSelected
         state.namespaceDelimiter = namespaceDelimiterField.text.trim().ifEmpty { ":" }
