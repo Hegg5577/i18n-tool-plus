@@ -113,5 +113,19 @@
                 description="以源语言为准，把各语言缺失的 key 机器翻译补齐，写入前先预览确认">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
+
+        <action id="com.up3d.i18n.BatchDeleteKeys"
+                class="com.up3d.i18n.actions.BatchDeleteKeysAction"
+                text="i18n: 批量删除 Key"
+                description="从侧边栏表格中选中多个 key，一次删除">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action id="com.up3d.i18n.BatchRenameKeys"
+                class="com.up3d.i18n.actions.BatchRenameKeysAction"
+                text="i18n: 批量重命名 Key"
+                description="对侧边栏表格中选中的 key 进行批量重命名">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>

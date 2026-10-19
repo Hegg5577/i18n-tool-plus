@@ -80,6 +80,13 @@ class LocaleRepository(
     fun localeFile(locale: String): File? =
         scanLocales().firstOrNull { it.locale == locale }?.file
 
+    /**
+     * 获取所有语言对应的文件列表。
+     * @return locale -> File 的 map
+     */
+    fun localeFiles(): Map<String, File?> =
+        scanLocales().associate { it.locale to it.file }
+
     private fun flattenValues(obj: JsonObject, prefix: String = ""): Map<String, String> {
         val result = LinkedHashMap<String, String>()
         if (keyStyle == KeyStyle.FLAT) {

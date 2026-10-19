@@ -47,6 +47,9 @@ class TranslationTablePanel(
     /** 双击某行时回调，参数为该行的 key。用于打开 key 编辑弹窗。 */
     var onEditKey: ((String) -> Unit)? = null
 
+    /** 多个 key 被选中时的回调。用于启用/禁用批量操作按钮。 */
+    var onSelectionChanged: ((List<String>) -> Unit)? = null
+
     private val searchField = SearchTextField()
     private val statusLabel = JLabel()
 
@@ -60,14 +63,15 @@ class TranslationTablePanel(
         table.rowHeight = JBUI.scale(26)
         table.showHorizontalLines = false
         table.showVerticalLines = false
-        table.selectionModel.selectionMode = ListSelectionModel.SINGLE_SELECTION
+        table.selectionModel.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
         table.tableHeader.reorderingAllowed = false
         table.fillsViewportHeight = true
 
         table.selectionModel.addListSelectionListener { event ->
             if (!event.valueIsAdjusting) {
-                val row = table.selectedRow
-                selectedKey = if (row >= 0) model.rowAt(row)?.key else null
+                val selected = getSelectedKeys()
+                selectedKey = selected.firstOrNull()
+                onSelectionChanged?.invoke(selected)
             }
         }
 
@@ -217,6 +221,12 @@ class TranslationTablePanel(
     /** 当前选中的整行数据。 */
     fun selectedRow(): TranslationRow? =
         table.selectedRow.takeIf { it >= 0 }?.let { model.rowAt(it) }
+
+    /** 获取全部选中的 key 列表。 */
+    fun getSelectedKeys(): List<String> {
+        val indices = table.selectedRows
+        return indices.mapNotNull { model.rowAt(it)?.key }
+    }
 
     /** 供外部与测试读取的表格引用。 */
     fun asTable(): JBTable = table
