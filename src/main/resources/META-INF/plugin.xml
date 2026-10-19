@@ -23,6 +23,10 @@
                            displayType="BALLOON"
                            isLogByDefault="true"/>
 
+        <!-- 项目打开时初始化 YAML 配置加载 -->
+        <projectListener
+                implementation="com.up3d.i18n.startup.I18nProjectOpenListener"/>
+
         <!-- PsiReference 支持：识别 t('key') 中的 key 引用 -->
         <psi.referenceContributor
                 implementation="com.up3d.i18n.editor.I18nPsiReferenceContributor"

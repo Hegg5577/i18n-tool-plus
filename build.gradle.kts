@@ -27,6 +27,10 @@ dependencies {
     // 不重复打进插件包，避免与 IDE 自带版本冲突。
     compileOnly("com.google.code.gson:gson:2.13.1")
 
+    // YAML 配置文件解析
+    compileOnly("org.yaml:snakeyaml:2.2")
+    testImplementation("org.yaml:snakeyaml:2.2")
+
     // 单元测试跑在 JVM 里而非 IDE 内，需要一份可执行的 gson 与 JUnit。
     // 上一条是 compileOnly（不打进插件包），测试运行期没有，所以单测要用 test 作用域。
     testImplementation("com.google.code.gson:gson:2.13.1")

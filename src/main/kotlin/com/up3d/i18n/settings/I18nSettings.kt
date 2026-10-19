@@ -6,6 +6,7 @@ import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.project.Project
 import com.intellij.util.xmlb.XmlSerializerUtil
+import com.up3d.i18n.config.I18nYamlConfigLoader
 
 /**
  * 项目级 i18n 配置。
@@ -106,6 +107,8 @@ class I18nSettings : PersistentStateComponent<I18nSettings.State> {
     )
 
     private var state = State()
+    private var project: Project? = null
+    private var yamlConfig: Map<String, Any> = emptyMap()
 
     override fun getState(): State = state
 
@@ -113,11 +116,56 @@ class I18nSettings : PersistentStateComponent<I18nSettings.State> {
         XmlSerializerUtil.copyBean(s, state)
     }
 
+    /**
+     * 设置项目实例并加载 YAML 配置。
+     * 由 IDE 框架自动调用。
+     */
+    fun initProject(p: Project) {
+        this.project = p
+        yamlConfig = I18nYamlConfigLoader.loadProjectConfig(p)
+        applyYamlOverrides()
+    }
+
+    /**
+     * 将 YAML 配置中的值应用到当前状态，覆盖 Settings XML。
+     * 优先级：YAML > Settings > 默认值
+     */
+    private fun applyYamlOverrides() {
+        if (yamlConfig.isEmpty()) return
+
+        state.localesPath = I18nYamlConfigLoader.getString(yamlConfig, "localesPath", state.localesPath)
+        state.sourceLocale = I18nYamlConfigLoader.getString(yamlConfig, "sourceLocale", state.sourceLocale)
+        state.pathMatcher = I18nYamlConfigLoader.getString(yamlConfig, "pathMatcher", state.pathMatcher)
+        state.keyStyle = I18nYamlConfigLoader.getString(yamlConfig, "keyStyle", state.keyStyle)
+
+        state.displayLocales = I18nYamlConfigLoader.getStringList(yamlConfig, "displayLocales", state.displayLocales).toMutableList()
+        state.supportedExtensions = I18nYamlConfigLoader.getStringList(yamlConfig, "supportedExtensions", state.supportedExtensions).toMutableList()
+        state.usageMatchRegex = I18nYamlConfigLoader.getStringList(yamlConfig, "usageMatchRegex", state.usageMatchRegex).toMutableList()
+        state.sourceDirs = I18nYamlConfigLoader.getStringList(yamlConfig, "sourceDirs", state.sourceDirs).toMutableList()
+
+        state.inlineAnnotationEnabled = I18nYamlConfigLoader.getBoolean(yamlConfig, "inlineAnnotationEnabled", state.inlineAnnotationEnabled)
+        state.annotationLocale = I18nYamlConfigLoader.getString(yamlConfig, "annotationLocale", state.annotationLocale)
+        state.fallbackToSource = I18nYamlConfigLoader.getBoolean(yamlConfig, "fallbackToSource", state.fallbackToSource)
+        state.overrideExisting = I18nYamlConfigLoader.getBoolean(yamlConfig, "overrideExisting", state.overrideExisting)
+        state.namespaceEnabled = I18nYamlConfigLoader.getBoolean(yamlConfig, "namespaceEnabled", state.namespaceEnabled)
+        state.namespaceDelimiter = I18nYamlConfigLoader.getString(yamlConfig, "namespaceDelimiter", state.namespaceDelimiter)
+
+        state.activeTranslationEngine = I18nYamlConfigLoader.getString(yamlConfig, "activeTranslationEngine", state.activeTranslationEngine)
+        state.deeplApiKey = I18nYamlConfigLoader.getString(yamlConfig, "deeplApiKey", state.deeplApiKey)
+        state.deeplIsFreeApi = I18nYamlConfigLoader.getBoolean(yamlConfig, "deeplIsFreeApi", state.deeplIsFreeApi)
+        state.openaiApiKey = I18nYamlConfigLoader.getString(yamlConfig, "openaiApiKey", state.openaiApiKey)
+        state.openaiModel = I18nYamlConfigLoader.getString(yamlConfig, "openaiModel", state.openaiModel)
+        state.openaiBaseUrl = I18nYamlConfigLoader.getString(yamlConfig, "openaiBaseUrl", state.openaiBaseUrl)
+    }
+
     /** 便捷访问：源语言代码。 */
     val sourceLocale: String get() = state.sourceLocale
 
     /** 便捷访问：语言包根目录。 */
     val localesPath: String get() = state.localesPath
+
+    /** 便捷访问：是否已加载 YAML 配置。 */
+    val hasYamlConfig: Boolean get() = yamlConfig.isNotEmpty()
 
     companion object {
         const val DEFAULT_LOCALES_DIR = "src/i18n/locales"
