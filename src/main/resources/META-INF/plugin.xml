@@ -129,5 +129,19 @@
                 description="对侧边栏表格中选中的 key 进行批量重命名">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
+
+        <action id="com.hegg5577.i18n.GenerateTypeDefinitions"
+                class="com.hegg5577.i18n.actions.GenerateTypeDefinitionsAction"
+                text="i18n: 生成 TypeScript 类型定义"
+                description="从翻译键自动生成 TypeScript 类型定义、Schema 和 Vue 3 类型">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action id="com.hegg5577.i18n.CheckTranslationQuality"
+                class="com.hegg5577.i18n.actions.CheckTranslationQualityAction"
+                text="i18n: 检查翻译质量"
+                description="验证翻译中的参数一致性、占位符完整性等问题">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>

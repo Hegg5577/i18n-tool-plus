@@ -2,7 +2,7 @@
 
 > 项目所有者：贺蒙召 (hegg5577)  
 > 最后更新：2026-10-19  
-> 功能完成度：**90%**（i18n-ally-next 核心功能基本实现）
+> 功能完成度：**100%**（全功能完成，包括增量扫描、质量检查、代码生成）
 
 ## 快速导航
 
@@ -166,10 +166,87 @@
 
 ## 当前阶段
 
-### 功能完成度
+### ✅ 阶段 15：增量扫描性能优化（新增）
+
+**IncrementalScanCache**：
+- 跟踪文件修改时间，只重新扫描改动过的文件
+- VirtualFileListener 监听文件系统变化
+- 60 秒自动触发全量扫描（防止内存溢出）
+- **性能提升**：从 O(n) 全量扫描降低到 O(Δ) 增量扫描
+
+---
+
+### ✅ 阶段 16：翻译质量检查（新增）
+
+**TranslationQualityChecker**：
+- 参数数量一致性检查
+- 占位符完整性验证
+  - 支持格式：`{0}`, `{name}`, `$1`, `%s` 等
+- HTML 标签一致性检查
+- 翻译长度合理性检查
+
+**CheckTranslationQualityAction**：
+- Tools 菜单集成
+- 生成详细的质量报告
+- 按问题类型和严重程度分类
+
+---
+
+### ✅ 阶段 17：PsiReference 完整集成（新增）
+
+**改进的 I18nPsiReferenceContributor**：
+- 精确匹配 i18n 函数调用（t(), T(), $t()）
+- 支持 i18n.t()、translator.t() 等形式
+- JavaScript/TypeScript/Vue/HTML 全覆盖
+
+**I18nKeyReference 功能增强**：
+- `resolve()` — 跳转到语言包定义位置
+- `getVariants()` — 代码补全提示所有可用 key
+- `handleElementRename()` — 批量重命名引用
+- `isReferenceTo()` — 准确的引用关系判定
+
+---
+
+### ✅ 阶段 18：代码生成框架（新增）
+
+**TypeScriptCodeGenerator**：
+
+1. **类型定义生成**
+   ```typescript
+   export type I18nKeys = "settings.title" | "settings.language" | ...;
+   export interface I18nMessages {
+     "settings.title": string;
+     ...
+   }
+   ```
+
+2. **结构化 Schema 生成**（用于编辑器自动补全）
+   ```typescript
+   export const I18nSchema = {
+     settings: { title: true, language: true },
+     errors: { notFound: true }
+   };
+   ```
+
+3. **Vue 3 组件类型**
+   ```typescript
+   export function useI18n(options?: UseI18nOptions) {
+     const t = (key: I18nKey, ...args: any[]): string => { ... }
+     return { t, locale };
+   }
+   ```
+
+**GenerateTypeDefinitionsAction**：
+- Tools 菜单集成
+- 自动检测项目中是否使用 Vue
+- 一次生成多个类型文件
+
+---
+
+## 功能完成度
 
 | 功能模块 | 完成度 | 状态 |
-|--------|--------|------|
+|:--------|:--------|:------|
 | 多语言对照表 | 100% | ✅ |
 | Settings 配置 | 100% | ✅ |
 | 缺失/过期检测 | 100% | ✅ |
@@ -180,47 +257,24 @@
 | Key 重命名 | 100% | ✅ |
 | YAML 配置 | 100% | ✅ |
 | 批量操作 | 100% | ✅ |
-| **总体** | **90%** | ✅ |
-
-### 缺少的 10% 功能
-
-1. **PsiReference 完整重构**（commit 9861c6a 提供基础，需要深度集成）
-   - 代码中的 key 引用自动更新
-   - 跨文件批量重构
-
-2. **增量扫描**
-   - 文件变化时增量扫描（当前全量扫描）
-   - 性能优化
-
-3. **翻译质量检查**
-   - 检测缺失的格式化参数 `{{var}}`
-   - 参数一致性验证
-
-4. **代码生成**
-   - 自动生成 TypeScript 类型定义
-   - IDE 代码补全增强
+| **增量扫描** | **100%** | ✅ NEW |
+| **质量检查** | **100%** | ✅ NEW |
+| **PsiReference 完整集成** | **100%** | ✅ NEW |
+| **代码生成** | **100%** | ✅ NEW |
+| **总体** | **100%** | ✅ COMPLETE |
 
 ---
 
 ## 后续计划
 
-### 短期（1-2 周）
+所有核心功能已完成。可选的增强方向：
 
-- [ ] PsiReference 完整集成（跨文件重构）
-- [ ] 增量扫描优化
-- [ ] YAML schema 验证
+### 长期优化
 
-### 中期（2-4 周）
-
-- [ ] 翻译质量检查
-- [ ] 参数一致性验证
-- [ ] 性能基准测试
-
-### 长期
-
-- [ ] 代码生成（TypeScript 类型）
-- [ ] 翻译记忆库
-- [ ] IDE 代码补全增强
+- 翻译记忆库（TM）支持
+- 上下文相关的翻译建议
+- 性能基准测试与优化
+- IDE 代码补全 AI 增强
 
 ---
 
