@@ -28,6 +28,20 @@
         <codeInsight.declarativeInlayProviderFactory
                 implementation="com.up3d.i18n.editor.I18nInlayProviderFactory"/>
 
+        <!-- Hover 多语言预览：鼠标悬停在 t('key') 上显示所有语言的翻译。 -->
+        <documentationProvider
+                implementation="com.up3d.i18n.editor.I18nHoverDocumentationProvider"
+                language="JavaScript"/>
+        <documentationProvider
+                implementation="com.up3d.i18n.editor.I18nHoverDocumentationProvider"
+                language="TypeScript"/>
+        <documentationProvider
+                implementation="com.up3d.i18n.editor.I18nHoverDocumentationProvider"
+                language="HTML"/>
+        <documentationProvider
+                implementation="com.up3d.i18n.editor.I18nHoverDocumentationProvider"
+                language="Vue"/>
+
         <!-- 硬编码字符串提取：右键菜单或 Alt+Enter 提取字符串为 i18n key。 -->
         <intentionAction>
             <className>com.up3d.i18n.actions.ExtractStringIntention</className>
