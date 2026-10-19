@@ -57,7 +57,14 @@ class TranslationTablePanel(
         border = JBUI.Borders.empty()
 
         add(buildToolbar(), BorderLayout.NORTH)
-        add(JBScrollPane(table), BorderLayout.CENTER)
+
+        // 使用 JBScrollPane 并启用水平滚动条
+        val scrollPane = JBScrollPane(table).apply {
+            horizontalScrollBarPolicy = javax.swing.JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED
+            verticalScrollBarPolicy = javax.swing.JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+        }
+        add(scrollPane, BorderLayout.CENTER)
+
         add(buildStatusBar(), BorderLayout.SOUTH)
 
         table.rowHeight = JBUI.scale(26)
@@ -69,7 +76,10 @@ class TranslationTablePanel(
         table.tableHeader.reorderingAllowed = true
         table.tableHeader.resizingAllowed = true
 
-        table.fillsViewportHeight = true
+        // 设置最小列宽以支持横向滚动
+        table.autoResizeMode = javax.swing.JTable.AUTO_RESIZE_OFF
+
+        table.fillsViewportHeight = false
 
         table.selectionModel.addListSelectionListener { event ->
             if (!event.valueIsAdjusting) {
@@ -246,27 +256,27 @@ class TranslationTablePanel(
         private val displayLocales: List<String>,
     ) : AbstractTableModel() {
 
-        /** 列顺序：源语言固定在第一列作为基准，其余按传入顺序。 */
+        /** 列顺序：Key 第一列，然后是源语言，然后是其他显示语言。 */
         private val localeOrder: List<String> = listOf(sourceLocale) + displayLocales
-        private val columns: List<String> = displayLocales.map { Flags.displayName(it) }
+        // 列标题：Key + 源语言 + 其他语言
+        private val columns: List<String> = listOf("Key") + listOf(Flags.displayName(sourceLocale)) + displayLocales.map { Flags.displayName(it) }
 
         private var rows: List<TranslationRow> = emptyList()
 
         override fun getRowCount(): Int = rows.size
 
-        override fun getColumnCount(): Int = columns.size + 1
+        override fun getColumnCount(): Int = columns.size
 
-        override fun getColumnName(column: Int): String =
-            if (column == 0) "Key" else columns[column - 1]
+        override fun getColumnName(column: Int): String = columns[column]
 
-        /** 第 0 列返回 String，其余返回 CellData 以走自定义渲染器。 */
+        /** 第 0 列返回 String（Key），其余返回 CellData 以走自定义渲染器。 */
         override fun getColumnClass(columnIndex: Int): Class<*> =
             if (columnIndex == 0) String::class.java else Any::class.java
 
         override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
             val row = rows[rowIndex]
             if (columnIndex == 0) return row.key
-            return CellData(row, localeOrder[columnIndex])
+            return CellData(row, localeOrder[columnIndex - 1])
         }
 
         fun update(newRows: List<TranslationRow>) {

@@ -40,7 +40,7 @@ internal class TranslationCellRenderer : TableCellRenderer {
         row: Int,
         column: Int,
     ): Component {
-        // Key 列：值就是 key 本身，原样显示，不加状态标记
+        // Key 列：值就是 key 本身，原样显示
         if (value !is CellData) {
             return JLabel(value?.toString().orEmpty()).apply {
                 font = UIUtil.getLabelFont()
@@ -73,7 +73,7 @@ internal class TranslationCellRenderer : TableCellRenderer {
         return JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
             isOpaque = false
             border = if (isSource) {
-                // 基准列右侧一条竖线作为视觉锚点
+                // 源语言列右侧一条竖线作为视觉锚点
                 JBUI.Borders.customLineRight(JBColor.border())
             } else {
                 JBUI.Borders.empty(2, 4)
