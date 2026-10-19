@@ -20,12 +20,18 @@ import java.io.File
  */
 class I18nHoverDocumentationProvider : DocumentationProvider {
 
+    init {
+        System.err.println("[I18nHoverDocumentationProvider] Initialized")
+    }
+
     override fun getQuickNavigateInfo(element: PsiElement?, originalElement: PsiElement?): String? {
+        System.err.println("[I18nHoverDocumentationProvider] getQuickNavigateInfo called, element=$element, original=$originalElement")
         if (originalElement == null) return null
         return findTranslationHtml(originalElement)
     }
 
     override fun generateDoc(element: PsiElement?, originalElement: PsiElement?): String? {
+        System.err.println("[I18nHoverDocumentationProvider] generateDoc called, element=$element, original=$originalElement")
         if (originalElement == null) return null
         return findTranslationHtml(originalElement)
     }
@@ -36,85 +42,125 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
         context: PsiElement?,
     ): PsiElement? {
         // 处理 i18n.edit?key=xxx 链接
-        if (link != null && context != null && link.startsWith("i18n.edit?key=")) {
-            try {
-                val key = link.substringAfter("key=").urlDecode()
-                val project = context.project
-                val settings = I18nSettings.getInstance(project)
-                val projectRoot = File(project.basePath ?: return null)
+        if (link == null || context == null) {
+            return null
+        }
 
-                ApplicationManager.getApplication().invokeLater {
-                    try {
-                        // 使用 LocaleRepository 获取完整的数据
-                        val repo = LocaleRepository(
-                            projectRoot,
-                            settings.localesPath,
-                            settings.state.pathMatcher,
-                            KeyStyle.NESTED,
-                        )
+        if (!link.startsWith("i18n.edit?key=")) {
+            return null
+        }
 
-                        val locales = repo.scanLocales()
-                        val values = mutableMapOf<String, String?>()
-                        val localeFiles = mutableMapOf<String, File>()
-                        val allLocales = settings.state.displayLocales.ifEmpty { listOf(settings.sourceLocale) }
+        System.err.println("Handling link: $link")
 
-                        // 收集所有语言的值和文件
-                        for (localeKeys in locales) {
-                            val value = localeKeys.keys.find { it == key }
-                            values[localeKeys.locale] = value
-                            localeFiles[localeKeys.locale] = localeKeys.file
-                        }
+        try {
+            val key = link.substringAfter("key=").urlDecode()
+            val project = context.project
+            val settings = I18nSettings.getInstance(project)
+            val projectRoot = File(project.basePath ?: return null)
 
-                        // 打开编辑对话框
-                        val dialog = KeyEditorDialog(
-                            project = project,
-                            key = key,
-                            sourceLocale = settings.sourceLocale,
-                            values = values,
-                            locales = allLocales,
-                            localeFiles = localeFiles,
-                            onSaved = { /* 刷新 UI */ }
-                        )
-                        dialog.show()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+            System.err.println("Opening editor for key: $key, project: ${project.name}, root: $projectRoot")
+
+            ApplicationManager.getApplication().invokeLater {
+                try {
+                    // 使用 LocaleRepository 获取完整的数据
+                    val repo = LocaleRepository(
+                        projectRoot,
+                        settings.localesPath,
+                        settings.state.pathMatcher,
+                        KeyStyle.NESTED,
+                    )
+
+                    val locales = repo.scanLocales()
+                    val values = mutableMapOf<String, String?>()
+                    val localeFiles = mutableMapOf<String, File>()
+                    val allLocales = settings.state.displayLocales.ifEmpty { listOf(settings.sourceLocale) }
+
+                    System.err.println("Found ${locales.size} locales, displaying: $allLocales")
+
+                    // 收集所有语言的值和文件
+                    for (localeKeys in locales) {
+                        val value = localeKeys.keys.find { it == key }
+                        values[localeKeys.locale] = value
+                        localeFiles[localeKeys.locale] = localeKeys.file
                     }
+
+                    System.err.println("Values collected: ${values.keys.joinToString(",")}")
+
+                    // 打开编辑对话框
+                    val dialog = KeyEditorDialog(
+                        project = project,
+                        key = key,
+                        sourceLocale = settings.sourceLocale,
+                        values = values,
+                        locales = allLocales,
+                        localeFiles = localeFiles,
+                        onSaved = { /* 刷新 UI */ }
+                    )
+                    System.err.println("Showing dialog for key: $key")
+                    dialog.show()
+                } catch (e: Exception) {
+                    System.err.println("Error in link handler: ${e.message}")
+                    e.printStackTrace()
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
             }
+        } catch (e: Exception) {
+            System.err.println("Error handling link: ${e.message}")
+            e.printStackTrace()
         }
         return null
     }
 
     private fun findTranslationHtml(element: PsiElement): String? {
-        val file = element.containingFile ?: return null
-        val project = element.project
-        val settings = I18nSettings.getInstance(project)
+        try {
+            val file = element.containingFile ?: return null
+            val project = element.project
+            val settings = I18nSettings.getInstance(project)
 
-        // 获取光标位置的文本（通常是字符串或标识符）
-        val text = element.text
-        val key = extractKeyFromText(text) ?: return null
+            // 获取光标位置的文本（通常是字符串或标识符）
+            val text = element.text
+            val key = extractKeyFromText(text) ?: return null
 
-        // 从语言包里查找这个 key 的所有翻译
-        val allValues = mutableMapOf<String, String>()
-        for (locale in settings.state.displayLocales.ifEmpty { listOf(settings.sourceLocale) }) {
-            val fallback = if (locale != settings.sourceLocale) settings.sourceLocale else ""
-            val values = TranslationIndex.values(
-                projectRoot = project.basePath ?: "",
-                locale = locale,
-                fallbackLocale = fallback,
-                localesDir = settings.localesPath,
-                pathMatcher = settings.state.pathMatcher,
-                keyStyle = com.hegg5577.i18n.locale.KeyStyle.NESTED,
-            )
-            allValues[locale] = values[key] ?: ""
+            val projectRoot = project.basePath ?: return null
+
+            // 获取展示的语言列表（优先使用 displayLocales，否则使用源语言）
+            val displayLocalesList = if (settings.state.displayLocales.isNotEmpty()) {
+                settings.state.displayLocales
+            } else {
+                listOf(settings.sourceLocale)
+            }
+
+            // 从语言包里查找这个 key 的所有翻译
+            val allValues = mutableMapOf<String, String>()
+            for (locale in displayLocalesList) {
+                try {
+                    val fallback = if (locale != settings.sourceLocale) settings.sourceLocale else ""
+                    val values = TranslationIndex.values(
+                        projectRoot = projectRoot,
+                        locale = locale,
+                        fallbackLocale = fallback,
+                        localesDir = settings.localesPath,
+                        pathMatcher = settings.state.pathMatcher,
+                        keyStyle = com.hegg5577.i18n.locale.KeyStyle.NESTED,
+                    )
+                    allValues[locale] = values[key] ?: ""
+                } catch (e: Exception) {
+                    System.err.println("Error loading locale $locale: ${e.message}")
+                    allValues[locale] = ""
+                }
+            }
+
+            // 至少要有一个翻译才显示
+            if (allValues.all { it.value.isEmpty() }) {
+                System.err.println("No translations found for key: $key in locales: ${displayLocalesList.joinToString(",")}")
+                return null
+            }
+
+            return buildHoverHtml(key, allValues)
+        } catch (e: Exception) {
+            System.err.println("Error in findTranslationHtml: ${e.message}")
+            e.printStackTrace()
+            return null
         }
-
-        // 至少要有一个翻译才显示
-        if (allValues.all { it.value.isEmpty() }) return null
-
-        return buildHoverHtml(key, allValues)
     }
 
     private fun extractKeyFromText(text: String): String? {
