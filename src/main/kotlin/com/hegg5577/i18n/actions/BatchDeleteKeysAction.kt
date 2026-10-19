@@ -29,7 +29,7 @@ class BatchDeleteKeysAction : AnAction() {
 
         val selectedKeys = tablePanel.getSelectedKeys()
         if (selectedKeys.isEmpty()) {
-            notify(project, "请先选择要删除的 Key", NotificationType.INFO)
+            notify(project, "请先选择要删除的 Key", NotificationType.INFORMATION)
             return
         }
 

@@ -225,7 +225,7 @@ class TranslationTablePanel(
     /** 获取全部选中的 key 列表。 */
     fun getSelectedKeys(): List<String> {
         val indices = table.selectedRows
-        return indices.mapNotNull { model.rowAt(it)?.key }
+        return indices.map { model.rowAt(it)?.key }.filterNotNull()
     }
 
     /** 供外部与测试读取的表格引用。 */

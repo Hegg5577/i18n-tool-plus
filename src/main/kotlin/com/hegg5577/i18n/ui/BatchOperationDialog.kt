@@ -75,7 +75,7 @@ class BatchOperationDialog(
                 lineWrap = true
                 wrapStyleWord = true
                 margin = JBUI.insets(4)
-                font = JBUI.CurrentTheme.Label.labelFont()
+                font = com.intellij.util.ui.UIUtil.getLabelFont()
             }
             add(textArea, BorderLayout.CENTER)
         }
