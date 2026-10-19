@@ -57,6 +57,12 @@
                 language="TypeScript"/>
         <documentationProvider
                 implementation="com.hegg5577.i18n.editor.I18nHoverDocumentationProvider"
+                language="JSX"/>
+        <documentationProvider
+                implementation="com.hegg5577.i18n.editor.I18nHoverDocumentationProvider"
+                language="TSX"/>
+        <documentationProvider
+                implementation="com.hegg5577.i18n.editor.I18nHoverDocumentationProvider"
                 language="HTML"/>
         <documentationProvider
                 implementation="com.hegg5577.i18n.editor.I18nHoverDocumentationProvider"

@@ -25,13 +25,11 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
     }
 
     override fun getQuickNavigateInfo(element: PsiElement?, originalElement: PsiElement?): String? {
-        System.err.println("[I18nHoverDocumentationProvider] getQuickNavigateInfo called, element=$element, original=$originalElement")
         if (originalElement == null) return null
         return findTranslationHtml(originalElement)
     }
 
     override fun generateDoc(element: PsiElement?, originalElement: PsiElement?): String? {
-        System.err.println("[I18nHoverDocumentationProvider] generateDoc called, element=$element, original=$originalElement")
         if (originalElement == null) return null
         return findTranslationHtml(originalElement)
     }
@@ -42,23 +40,15 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
         context: PsiElement?,
     ): PsiElement? {
         // 处理 i18n.edit?key=xxx 链接
-        if (link == null || context == null) {
+        if (link == null || context == null || !link.startsWith("i18n.edit?key=")) {
             return null
         }
-
-        if (!link.startsWith("i18n.edit?key=")) {
-            return null
-        }
-
-        System.err.println("Handling link: $link")
 
         try {
             val key = link.substringAfter("key=").urlDecode()
             val project = context.project
             val settings = I18nSettings.getInstance(project)
             val projectRoot = File(project.basePath ?: return null)
-
-            System.err.println("Opening editor for key: $key, project: ${project.name}, root: $projectRoot")
 
             ApplicationManager.getApplication().invokeLater {
                 try {
@@ -75,16 +65,12 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
                     val localeFiles = mutableMapOf<String, File>()
                     val allLocales = settings.state.displayLocales.ifEmpty { listOf(settings.sourceLocale) }
 
-                    System.err.println("Found ${locales.size} locales, displaying: $allLocales")
-
                     // 收集所有语言的值和文件
                     for (localeKeys in locales) {
                         val value = localeKeys.keys.find { it == key }
                         values[localeKeys.locale] = value
                         localeFiles[localeKeys.locale] = localeKeys.file
                     }
-
-                    System.err.println("Values collected: ${values.keys.joinToString(",")}")
 
                     // 打开编辑对话框
                     val dialog = KeyEditorDialog(
@@ -96,15 +82,12 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
                         localeFiles = localeFiles,
                         onSaved = { /* 刷新 UI */ }
                     )
-                    System.err.println("Showing dialog for key: $key")
                     dialog.show()
                 } catch (e: Exception) {
-                    System.err.println("Error in link handler: ${e.message}")
                     e.printStackTrace()
                 }
             }
         } catch (e: Exception) {
-            System.err.println("Error handling link: ${e.message}")
             e.printStackTrace()
         }
         return null
@@ -144,21 +127,15 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
                     )
                     allValues[locale] = values[key] ?: ""
                 } catch (e: Exception) {
-                    System.err.println("Error loading locale $locale: ${e.message}")
                     allValues[locale] = ""
                 }
             }
 
             // 至少要有一个翻译才显示
-            if (allValues.all { it.value.isEmpty() }) {
-                System.err.println("No translations found for key: $key in locales: ${displayLocalesList.joinToString(",")}")
-                return null
-            }
+            if (allValues.all { it.value.isEmpty() }) return null
 
             return buildHoverHtml(key, allValues)
         } catch (e: Exception) {
-            System.err.println("Error in findTranslationHtml: ${e.message}")
-            e.printStackTrace()
             return null
         }
     }
