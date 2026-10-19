@@ -1,5 +1,6 @@
 package com.up3d.i18n.ui
 
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.ValidationInfo
@@ -10,6 +11,9 @@ import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.up3d.i18n.locale.TranslationSaver
+import com.up3d.i18n.translator.PlaceholderProtector
+import com.up3d.i18n.translator.TranslationEngineManager
+import com.up3d.i18n.translator.TranslationException
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Dimension
@@ -151,6 +155,12 @@ class KeyEditorDialog(
     private fun buildFooter(): JPanel = JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
         border = JBUI.Borders.emptyTop(8)
 
+        add(javax.swing.JButton("自动翻译").apply {
+            isFocusable = false
+            toolTipText = "使用翻译引擎自动填充缺失的译文"
+            addActionListener { autoTranslate() }
+        })
+
         add(javax.swing.JButton("用源语言填充空的译文").apply {
             isFocusable = false
             toolTipText = "把所有尚未填写（缺失或空）的语言填成源语言原文"
@@ -161,6 +171,77 @@ class KeyEditorDialog(
             isFocusable = false
             addActionListener { resetFields() }
         })
+    }
+
+    /** 使用翻译引擎自动填充缺失的译文。 */
+    private fun autoTranslate() {
+        val sourceText = fields[sourceLocale]?.text.orEmpty().trim()
+        if (sourceText.isBlank()) {
+            com.intellij.openapi.ui.Messages.showErrorDialog(
+                project,
+                "源语言（${Flags.displayName(sourceLocale)}）不能为空",
+                "无法翻译",
+            )
+            return
+        }
+
+        // 找出所有需要翻译的目标语言（缺失或空）
+        val targetLocales = locales.filter { locale ->
+            locale != sourceLocale && fields[locale]?.text.orEmpty().isBlank()
+        }
+        if (targetLocales.isEmpty()) {
+            com.intellij.openapi.ui.Messages.showInfoMessage(
+                project,
+                "没有需要翻译的语言",
+                "提示",
+            )
+            return
+        }
+
+        ProgressManager.getInstance().runProcessWithProgressSynchronously(
+            {
+                try {
+                    doAutoTranslate(sourceText, targetLocales)
+                } catch (e: Exception) {
+                    com.intellij.openapi.ui.Messages.showErrorDialog(
+                        project,
+                        "翻译失败：${e.message}",
+                        "自动翻译失败",
+                    )
+                }
+            },
+            "翻译中…",
+            true,
+            project,
+        )
+    }
+
+    private fun doAutoTranslate(sourceText: String, targetLocales: List<String>) {
+        val manager = TranslationEngineManager.getInstance(project)
+        val engine = manager.getActiveEngine()
+
+        try {
+            // 保护占位符和 HTML 标签
+            val protected = PlaceholderProtector.protect(sourceText)
+            val textToTranslate = protected.text
+
+            // 批量翻译
+            val translatedTexts = engine.translate(
+                texts = targetLocales.map { textToTranslate },
+                targetLocale = targetLocales.first(),
+                sourceLocale = sourceLocale,
+            )
+
+            // 逐条还原占位符并更新 UI
+            for ((index, locale) in targetLocales.withIndex()) {
+                val translated = translatedTexts.getOrNull(index)?.let { protected.restore(it) }
+                if (translated != null) {
+                    fields[locale]?.text = translated
+                }
+            }
+        } catch (e: TranslationException) {
+            throw e
+        }
     }
 
     /** 把空缺的语言填成源语言原文。 */

@@ -27,6 +27,12 @@ data class I18nContext(
     val fallbackToSource: Boolean,
     val overrideExisting: Boolean,
     val sourceDirs: List<String>,
+    val activeTranslationEngine: String,
+    val deeplApiKey: String,
+    val deeplIsFreeApi: Boolean,
+    val openaiApiKey: String,
+    val openaiModel: String,
+    val openaiBaseUrl: String,
 ) {
     /** 行内提示实际使用的语言：优先配置项，其次首选显示语言，最后源语言。 */
     val effectiveAnnotationLocale: String
@@ -72,6 +78,12 @@ data class I18nContext(
                 fallbackToSource = state.fallbackToSource,
                 overrideExisting = state.overrideExisting,
                 sourceDirs = state.sourceDirs.filter { it.isNotBlank() },
+                activeTranslationEngine = state.activeTranslationEngine,
+                deeplApiKey = state.deeplApiKey,
+                deeplIsFreeApi = state.deeplIsFreeApi,
+                openaiApiKey = state.openaiApiKey,
+                openaiModel = state.openaiModel,
+                openaiBaseUrl = state.openaiBaseUrl,
             )
         }
     }

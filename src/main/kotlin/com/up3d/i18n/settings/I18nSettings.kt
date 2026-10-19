@@ -85,6 +85,24 @@ class I18nSettings : PersistentStateComponent<I18nSettings.State> {
 
         /** 扫描源码的目录（逗号分隔，相对项目根）。用于「缺失检测」比对 key 使用情况。 */
         var sourceDirs: MutableList<String> = mutableListOf("src"),
+
+        /** 活跃的翻译引擎 ID。默认使用 Google 翻译（免费）。 */
+        var activeTranslationEngine: String = "google-free",
+
+        /** DeepL API Key。 */
+        var deeplApiKey: String = "",
+
+        /** DeepL 是否使用免费版 API。 */
+        var deeplIsFreeApi: Boolean = true,
+
+        /** OpenAI API Key。 */
+        var openaiApiKey: String = "",
+
+        /** OpenAI 模型名称。默认 gpt-3.5-turbo。 */
+        var openaiModel: String = "gpt-3.5-turbo",
+
+        /** OpenAI API 基础 URL。支持代理或自建 API。 */
+        var openaiBaseUrl: String = "https://api.openai.com/v1",
     )
 
     private var state = State()
