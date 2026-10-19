@@ -28,6 +28,12 @@
         <codeInsight.declarativeInlayProviderFactory
                 implementation="com.up3d.i18n.editor.I18nInlayProviderFactory"/>
 
+        <!-- 硬编码字符串提取：右键菜单或 Alt+Enter 提取字符串为 i18n key。 -->
+        <intentionAction>
+            <className>com.up3d.i18n.actions.ExtractStringIntention</className>
+            <category>i18n</category>
+        </intentionAction>
+
         <!-- 设置页：语言包路径、路径模式、源语言、匹配正则全部可配。 -->
         <projectConfigurable parentId="tools"
                              instance="com.up3d.i18n.settings.I18nConfigurable"
