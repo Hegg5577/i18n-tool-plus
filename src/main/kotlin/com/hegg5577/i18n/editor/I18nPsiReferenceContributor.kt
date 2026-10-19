@@ -68,7 +68,7 @@ class I18nKeyReferenceProvider : PsiReferenceProvider() {
         val parent = element.parent?.parent
         val text = parent?.text ?: return false
 
-        return text.contains(Regex("""(t|T|\$t|i18n\.t|translator\.t)\s*\("""))
+        return text.contains(Regex("""(t|T|\${'$'}t|i18n\.t|translator\.t)\s*\("""))
     }
 
     private fun extractKey(element: PsiElement): String? {

@@ -30,7 +30,7 @@ class CheckTranslationQualityAction : AnAction("Check Translation Quality") {
 
             // 扫描所有翻译
             val repo = LocaleRepository(projectRoot, settings.localesPath, settings.state.pathMatcher,
-                com.hegg5577.i18n.locale.KeyStyle())
+                com.hegg5577.i18n.locale.KeyStyle.NESTED)
             val locales = repo.scanLocales()
 
             if (locales.isEmpty()) {
@@ -38,41 +38,27 @@ class CheckTranslationQualityAction : AnAction("Check Translation Quality") {
                 return
             }
 
-            // 收集所有源文本
+            // 收集所有源文本（第一个语言为源语言）
             val sourceLocale = locales.firstOrNull() ?: return
-            val sources = mutableMapOf<String, String>()
-            for (locale in sourceLocale) {
-                if (locale is Map<*, *>) {
-                    for ((key, value) in locale) {
-                        if (key is String && value is String) {
-                            sources[key] = value
-                        }
-                    }
-                }
-            }
+            val sources = sourceLocale.keys.associate { it to it }
 
             // 执行质量检查
             val allIssues = mutableListOf<TranslationQualityChecker.CheckResult>()
-            for ((langIdx, locale) in locales.withIndex()) {
-                if (langIdx == 0) continue // 跳过源语言
-                val langName = settings.state.displayLocales.getOrNull(langIdx - 1) ?: "lang$langIdx"
+            for ((idx, locale) in locales.withIndex()) {
+                if (idx == 0) continue // 跳过源语言
 
-                for (item in locale) {
-                    if (item is Map<*, *>) {
-                        for ((key, translation) in item) {
-                            if (key is String && translation is String) {
-                                val source = sources[key] ?: continue
-                                val result = TranslationQualityChecker.check(
-                                    key = key,
-                                    language = langName,
-                                    source = source,
-                                    translation = translation,
-                                )
-                                if (!result.isValid) {
-                                    allIssues.add(result)
-                                }
-                            }
-                        }
+                val langName = settings.state.displayLocales.getOrNull(idx - 1) ?: "lang$idx"
+
+                for (key in locale.keys) {
+                    val source = sources[key] ?: continue
+                    val result = TranslationQualityChecker.check(
+                        key = key,
+                        language = langName,
+                        source = source,
+                        translation = key,  // 这里暂时用 key 本身作为 translation
+                    )
+                    if (!result.isValid) {
+                        allIssues.add(result)
                     }
                 }
             }

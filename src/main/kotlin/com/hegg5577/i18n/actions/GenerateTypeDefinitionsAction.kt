@@ -31,7 +31,7 @@ class GenerateTypeDefinitionsAction : AnAction("Generate i18n Types") {
                 projectRoot,
                 settings.localesPath,
                 settings.state.pathMatcher,
-                KeyStyle(),
+                com.hegg5577.i18n.locale.KeyStyle.NESTED,
                 "src/types/i18n.ts",
             )
 
@@ -40,7 +40,7 @@ class GenerateTypeDefinitionsAction : AnAction("Generate i18n Types") {
                 projectRoot,
                 settings.localesPath,
                 settings.state.pathMatcher,
-                KeyStyle(),
+                com.hegg5577.i18n.locale.KeyStyle.NESTED,
                 "src/types/i18n-schema.ts",
             )
 
@@ -51,7 +51,7 @@ class GenerateTypeDefinitionsAction : AnAction("Generate i18n Types") {
                     projectRoot,
                     settings.localesPath,
                     settings.state.pathMatcher,
-                    KeyStyle(),
+                    com.hegg5577.i18n.locale.KeyStyle.NESTED,
                     "src/types/i18n-vue.ts",
                 )
             } else {
@@ -76,7 +76,7 @@ class GenerateTypeDefinitionsAction : AnAction("Generate i18n Types") {
                     "生成成功",
                 )
             } else {
-                Messages.showErrorMessage(project, "生成过程中出错", "生成失败")
+                Messages.showErrorDialog(project, "生成过程中出错", "生成失败")
             }
         } catch (e: Exception) {
             Messages.showErrorDialog(project, e.message ?: "未知错误", "错误")
