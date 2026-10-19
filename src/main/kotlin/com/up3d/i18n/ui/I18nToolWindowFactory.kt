@@ -189,32 +189,59 @@ class I18nToolWindowFactory : ToolWindowFactory {
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val service = project.getService(I18nPanelService::class.java)
-        val panel = TranslationTablePanel("en", emptyList())
 
-        // 双击某行 -> 打开 key 编辑弹窗
-        panel.onEditKey = { key -> openKeyEditor(project, key, service) }
+        // 概览面板
+        val overviewPanel = OverviewPanel()
 
-        val manager = ContentFactory.getInstance()
-        val content = manager.createContent(panel, "翻译对照", false)
-        toolWindow.contentManager.addContent(content)
+        // 翻译对照表
+        val tablePanel = TranslationTablePanel("en", emptyList())
+        tablePanel.onEditKey = { key -> openKeyEditor(project, key, service) }
 
+        // 缺失检测
         val missingPanel = MissingKeysPanel()
-        val missingContent = manager.createContent(missingPanel, "缺失检测", false)
+
+        // 添加三个 tab
+        val manager = ContentFactory.getInstance()
+        val overviewContent = manager.createContent(overviewPanel, "概览", false)
+        toolWindow.contentManager.addContent(overviewContent)
+
+        val tableContent = manager.createContent(tablePanel, "翻译对照", false)
+        toolWindow.contentManager.addContent(tableContent)
+
+        val missingContent = manager.createContent(missingPanel, "检测", false)
         toolWindow.contentManager.addContent(missingContent)
 
+        // 数据订阅
         val unsubscribe = service.subscribe { snapshot ->
-            // ToolWindow 已关闭时不再重绘，避免对已 dispose 的组件操作
+            // ToolWindow 已关闭时不再重绘
             if (toolWindow.isDisposed) return@subscribe
-            panel.setLocales(snapshot.sourceLocale, snapshot.displayLocales)
-            panel.setRows(snapshot.rows)
-            panel.setStatus(snapshot.warning)
+
+            // 更新概览面板
+            overviewPanel.setProgress(snapshot.progress)
+            overviewPanel.setStats(
+                definedCount = snapshot.definedCount,
+                usedCount = snapshot.usedCount,
+                missingCount = snapshot.missingKeys.size,
+                unusedCount = snapshot.unusedKeys.size,
+            )
+            overviewPanel.setActions(
+                onRefresh = { service.refresh() },
+                onDiagnose = { showDiagnoseDialog(project) },
+                onSettings = { project.showSettingsEditor() },
+            )
+
+            // 更新翻译对照表
+            tablePanel.setLocales(snapshot.sourceLocale, snapshot.displayLocales)
+            tablePanel.setRows(snapshot.rows)
+            tablePanel.setStatus(snapshot.warning)
+
+            // 更新缺失检测面板
             missingPanel.setData(
                 missing = snapshot.missingKeys.map { it.key to it.files },
                 unused = snapshot.unusedKeys,
                 definedCount = snapshot.definedCount,
                 usedCount = snapshot.usedCount,
             )
-            // 缺失列表双击同样能编辑：既然检测出来了，就该能就地补齐
             missingPanel.onEditKey = { key -> openKeyEditor(project, key, service) }
         }
 
@@ -252,6 +279,106 @@ private fun openKeyEditor(project: Project, key: String, service: I18nPanelServi
             service.refresh()
         },
     ).show()
+}
+
+/**
+ * 显示诊断对话框。
+ */
+private fun showDiagnoseDialog(project: Project) {
+    val context = I18nContext.of(project)
+    if (!context.isValid) {
+        com.intellij.openapi.ui.Messages.showErrorDialog(
+            project,
+            "无法定位项目根目录",
+            "诊断失败",
+        )
+        return
+    }
+
+    val repo = context.repository()
+    if (repo == null) {
+        com.intellij.openapi.ui.Messages.showErrorDialog(
+            project,
+            "无法初始化语言包仓库",
+            "诊断失败",
+        )
+        return
+    }
+
+    val report = repo.buildReport(context.sourceLocale)
+    val sections = mutableListOf<Pair<String, List<DiagnosticItem>>>()
+
+    // 检查语言包
+    sections.add(
+        "语言包检查" to listOf(
+            DiagnosticItem(
+                ok = report.locales.isNotEmpty(),
+                title = if (report.locales.isEmpty()) "未找到任何语言包" else "找到 ${report.locales.size} 个语言",
+                detail = report.locales.joinToString(", ") { it.locale },
+            ),
+        )
+    )
+
+    // 检查一致性
+    if (report.locales.isNotEmpty()) {
+        val consistencyItems = mutableListOf<DiagnosticItem>()
+        val baseLocale = report.locales.first().locale
+        for (locale in report.locales) {
+            if (locale.locale == baseLocale) continue
+            val missing = report.missing[locale.locale]?.size ?: 0
+            val extra = report.extra[locale.locale]?.size ?: 0
+            consistencyItems.add(
+                DiagnosticItem(
+                    ok = missing == 0 && extra == 0,
+                    title = "${Flags.displayName(locale.locale)}",
+                    detail = when {
+                        missing == 0 && extra == 0 -> "完全一致"
+                        missing > 0 && extra == 0 -> "缺失 $missing 个 key"
+                        missing == 0 && extra > 0 -> "多余 $extra 个 key"
+                        else -> "缺失 $missing 个，多余 $extra 个"
+                    },
+                )
+            )
+        }
+        if (consistencyItems.isNotEmpty()) {
+            sections.add("语言包一致性" to consistencyItems)
+        }
+    }
+
+    val conclusionOk = report.isConsistent && report.locales.isNotEmpty()
+    val conclusion = when {
+        report.locales.isEmpty() -> "未找到语言包文件，请检查配置"
+        report.isConsistent -> "所有语言包完全一致，没有问题"
+        else -> "发现 ${report.missing.size + report.extra.size} 处不一致，需要修复"
+    }
+
+    DiagnosticDialog(
+        project = project,
+        fileName = "i18n 诊断",
+        reportText = buildString {
+            append("i18n 诊断报告\n")
+            append("时间：${java.time.LocalDateTime.now()}\n\n")
+            for ((section, items) in sections) {
+                append("【$section】\n")
+                for (item in items) {
+                    append("  ${if (item.ok) "✓" else "✗"} ${item.title}\n")
+                    if (item.detail.isNotBlank()) append("     ${item.detail}\n")
+                }
+            }
+            append("\n【结论】$conclusion\n")
+        },
+        sections = sections,
+        conclusionOk = conclusionOk,
+        conclusion = conclusion,
+    ).show()
+}
+
+/**
+ * 打开设置对话框。
+ */
+private fun Project.showSettingsEditor() {
+    com.intellij.openapi.options.ShowSettingsUtil.getInstance()
+        .showSettingsDialog(this, com.up3d.i18n.settings.I18nConfigurable::class.java)
 }
 
 /** 便捷入口：主动打开侧边栏面板。 */
