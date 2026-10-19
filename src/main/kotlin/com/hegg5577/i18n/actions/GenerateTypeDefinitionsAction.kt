@@ -1,7 +1,8 @@
 package com.hegg5577.i18n.actions
 
 import com.hegg5577.i18n.generator.TypeScriptCodeGenerator
-import com.hegg5577.i18n.settings.I18nContext
+import com.hegg5577.i18n.settings.I18nSettings
+import com.hegg5577.i18n.locale.KeyStyle
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.Project
@@ -23,34 +24,34 @@ class GenerateTypeDefinitionsAction : AnAction("Generate i18n Types") {
 
         try {
             val projectRoot = File(project.basePath ?: return)
-            val context = I18nContext.getInstance(project)
-            val config = context.config
+            val settings = I18nSettings.getInstance(project)
 
             // 生成主类型定义
             val typesDef = TypeScriptCodeGenerator.generateTypeDefinitions(
                 projectRoot,
-                config.localesDir,
-                config.pathMatcher,
-                config.keyStyle,
+                settings.localesPath,
+                settings.state.pathMatcher,
+                KeyStyle(),
                 "src/types/i18n.ts",
             )
 
             // 生成结构化 Schema
             val schemaDef = TypeScriptCodeGenerator.generateStructuredSchema(
                 projectRoot,
-                config.localesDir,
-                config.pathMatcher,
-                config.keyStyle,
+                settings.localesPath,
+                settings.state.pathMatcher,
+                KeyStyle(),
                 "src/types/i18n-schema.ts",
             )
 
             // 生成 Vue 3 类型（如果项目包含 Vue）
-            val vueTypeDef = if (File(projectRoot, "package.json").readText().contains("vue")) {
+            val vueTypeDef = if (File(projectRoot, "package.json").exists() &&
+                File(projectRoot, "package.json").readText().contains("vue")) {
                 TypeScriptCodeGenerator.generateVueComponentTypes(
                     projectRoot,
-                    config.localesDir,
-                    config.pathMatcher,
-                    config.keyStyle,
+                    settings.localesPath,
+                    settings.state.pathMatcher,
+                    KeyStyle(),
                     "src/types/i18n-vue.ts",
                 )
             } else {

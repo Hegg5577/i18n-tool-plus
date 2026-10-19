@@ -254,29 +254,29 @@ class IncrementalScanCache(
 
     // VirtualFileListener 实现
 
-    override fun beforePropertyChange(event: VirtualFileEvent) {}
+    override fun beforePropertyChange(event: com.intellij.openapi.vfs.VirtualFilePropertyEvent) {}
 
-    override fun beforeContentsChange(event: VirtualFileEvent) {}
+    override fun beforeContentsChange(event: com.intellij.openapi.vfs.VirtualFileEvent) {}
 
-    override fun contentsChanged(event: VirtualFileEvent) {
+    override fun contentsChanged(event: com.intellij.openapi.vfs.VirtualFileEvent) {
         invalidateReports()
     }
 
-    override fun fileCreated(event: VirtualFileEvent) {
+    override fun fileCreated(event: com.intellij.openapi.vfs.VirtualFileEvent) {
         invalidateReports()
     }
 
-    override fun fileDeleted(event: VirtualFileEvent) {
+    override fun fileDeleted(event: com.intellij.openapi.vfs.VirtualFileEvent) {
         invalidateReports()
     }
 
-    override fun fileMoved(event: VirtualFileEvent) {
+    override fun fileMoved(event: com.intellij.openapi.vfs.VirtualFileMoveEvent) {
         invalidateReports()
     }
 
-    override fun fileCopied(event: VirtualFileEvent) {
+    override fun fileCopied(event: com.intellij.openapi.vfs.VirtualFileCopyEvent) {
         invalidateReports()
     }
 
-    override fun propertyChanged(event: VirtualFileEvent) {}
+    override fun propertyChanged(event: com.intellij.openapi.vfs.VirtualFilePropertyEvent) {}
 }

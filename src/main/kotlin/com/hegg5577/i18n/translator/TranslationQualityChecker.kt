@@ -210,11 +210,9 @@ object TranslationQualityChecker {
         }
 
         return results.sortedWith(
-            compareBy(
-                { it.issues.maxOrNull()?.severity?.ordinal },
-                { it.key },
-                { it.language }
-            )
+            compareBy<TranslationQualityChecker.CheckResult> { it.issues.maxByOrNull { issue -> issue.severity.ordinal }?.severity?.ordinal ?: -1 }
+                .thenBy { it.key }
+                .thenBy { it.language }
         )
     }
 }

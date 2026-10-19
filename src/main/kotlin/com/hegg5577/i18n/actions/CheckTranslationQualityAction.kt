@@ -1,7 +1,7 @@
 package com.hegg5577.i18n.actions
 
 import com.hegg5577.i18n.translator.TranslationQualityChecker
-import com.hegg5577.i18n.settings.I18nContext
+import com.hegg5577.i18n.settings.I18nSettings
 import com.hegg5577.i18n.locale.LocaleRepository
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -26,35 +26,53 @@ class CheckTranslationQualityAction : AnAction("Check Translation Quality") {
 
         try {
             val projectRoot = File(project.basePath ?: return)
-            val context = I18nContext.getInstance(project)
-            val config = context.config
+            val settings = I18nSettings.getInstance(project)
 
             // 扫描所有翻译
-            val repo = LocaleRepository(projectRoot, config.localesDir, config.pathMatcher, config.keyStyle)
+            val repo = LocaleRepository(projectRoot, settings.localesPath, settings.state.pathMatcher,
+                com.hegg5577.i18n.locale.KeyStyle())
             val locales = repo.scanLocales()
 
-            // 收集所有源文本（假设第一个语言为源语言）
+            if (locales.isEmpty()) {
+                Messages.showInfoMessage(project, "未找到翻译文件", "质量检查")
+                return
+            }
+
+            // 收集所有源文本
             val sourceLocale = locales.firstOrNull() ?: return
-            val sources = sourceLocale.flatMap { it.keys }.associate { it to (it as? String) ?: "" }
+            val sources = mutableMapOf<String, String>()
+            for (locale in sourceLocale) {
+                if (locale is Map<*, *>) {
+                    for ((key, value) in locale) {
+                        if (key is String && value is String) {
+                            sources[key] = value
+                        }
+                    }
+                }
+            }
 
             // 执行质量检查
             val allIssues = mutableListOf<TranslationQualityChecker.CheckResult>()
-            for (locale in locales.drop(1)) {
-                val langKey = locale.keys.firstOrNull() ?: continue
-                val translations = locale.flatMap { it.keys }
-                    .associate { it to (it as? String) ?: "" }
+            for ((langIdx, locale) in locales.withIndex()) {
+                if (langIdx == 0) continue // 跳过源语言
+                val langName = settings.state.displayLocales.getOrNull(langIdx - 1) ?: "lang$langIdx"
 
-                for ((key, translation) in translations) {
-                    val source = sources[key] ?: continue
-                    val result = TranslationQualityChecker.check(
-                        key = key,
-                        language = langKey as? String ?: "unknown",
-                        source = source,
-                        translation = translation,
-                    )
-
-                    if (!result.isValid) {
-                        allIssues.add(result)
+                for (item in locale) {
+                    if (item is Map<*, *>) {
+                        for ((key, translation) in item) {
+                            if (key is String && translation is String) {
+                                val source = sources[key] ?: continue
+                                val result = TranslationQualityChecker.check(
+                                    key = key,
+                                    language = langName,
+                                    source = source,
+                                    translation = translation,
+                                )
+                                if (!result.isValid) {
+                                    allIssues.add(result)
+                                }
+                            }
+                        }
                     }
                 }
             }

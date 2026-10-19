@@ -187,9 +187,9 @@ object TypeScriptCodeGenerator {
     /**
      * 构建嵌套的键结构。
      */
-    private fun buildNestedSchema(keys: Set<String>, keyStyle: KeyStyle): String {
+    private fun buildNestedSchema(keys: Set<String>, keyStyle: com.hegg5577.i18n.locale.KeyStyle): String {
         val nested = mutableMapOf<String, Any>()
-        val separator = keyStyle.separator
+        val separator = "."  // 默认使用点号作为分隔符
 
         for (key in keys) {
             val parts = key.split(separator)
