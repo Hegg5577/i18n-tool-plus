@@ -16,6 +16,7 @@ import java.awt.Dimension
 import javax.swing.DefaultComboBoxModel
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.JTabbedPane
 
 /**
  * i18n 设置面板。
@@ -66,6 +67,8 @@ class I18nConfigurable(private val project: Project) : Configurable {
     private val overrideExisting = JBCheckBox("批量翻译时覆盖已有译文（默认关闭，避免误伤人工译文）")
     private val namespaceEnabled = JBCheckBox("启用命名空间")
 
+    private val translationEnginePanel = TranslationEnginePanel(project)
+
     private var panel: JComponent? = null
 
     override fun getDisplayName(): String = "i18n Helper"
@@ -73,7 +76,8 @@ class I18nConfigurable(private val project: Project) : Configurable {
     override fun createComponent(): JComponent {
         val root = JPanel(BorderLayout())
 
-        val form = FormBuilder.createFormBuilder()
+        // 基础配置选项卡
+        val basicForm = FormBuilder.createFormBuilder()
             .addLabeledComponent(JBLabel("语言包根目录"), localesPathField, 1, false)
             .addLabeledComponent(JBLabel("路径模式"), matcherCombo, 1, false)
             .addComponent(
@@ -104,8 +108,18 @@ class I18nConfigurable(private val project: Project) : Configurable {
             )
             .addComponent(JBScrollPane(regexArea))
 
-        root.add(form.panel, BorderLayout.CENTER)
-        root.preferredSize = Dimension(JBUI.scale(660), JBUI.scale(720))
+        val basicPanel = JPanel(BorderLayout()).apply {
+            add(basicForm.panel, BorderLayout.CENTER)
+        }
+
+        // 使用 TabbedPane 来组织不同的配置分类
+        val tabbedPane = JTabbedPane().apply {
+            addTab("基本设置", basicPanel)
+            addTab("翻译引擎", translationEnginePanel.createPanel())
+        }
+
+        root.add(tabbedPane, BorderLayout.CENTER)
+        root.preferredSize = Dimension(JBUI.scale(720), JBUI.scale(760))
 
         panel = root
         reset()
@@ -128,6 +142,7 @@ class I18nConfigurable(private val project: Project) : Configurable {
         fallbackToSource.isSelected = state.fallbackToSource
         overrideExisting.isSelected = state.overrideExisting
         regexArea.text = state.usageMatchRegex.joinToString("\n")
+        translationEnginePanel.reset()
     }
 
     /** 把界面写回配置，并刷新受影响的缓存与面板。 */
@@ -150,6 +165,7 @@ class I18nConfigurable(private val project: Project) : Configurable {
         state.fallbackToSource = fallbackToSource.isSelected
         state.overrideExisting = overrideExisting.isSelected
         state.usageMatchRegex = regexLines().toMutableList()
+        translationEnginePanel.apply()
 
         // 配置变了，缓存必须失效，否则面板与行内提示还显示旧数据
         com.up3d.i18n.locale.TranslationIndex.invalidate()
@@ -170,7 +186,8 @@ class I18nConfigurable(private val project: Project) : Configurable {
             inlineEnabled.isSelected != s.inlineAnnotationEnabled ||
             fallbackToSource.isSelected != s.fallbackToSource ||
             overrideExisting.isSelected != s.overrideExisting ||
-            regexLines() != s.usageMatchRegex
+            regexLines() != s.usageMatchRegex ||
+            translationEnginePanel.isModified()
     }
 
     override fun disposeUIResources() {
