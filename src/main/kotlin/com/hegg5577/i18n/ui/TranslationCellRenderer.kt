@@ -55,17 +55,13 @@ internal class TranslationCellRenderer : TableCellRenderer {
         val isSource = value.locale == sourceLocale
         val status = value.row.status(value.locale)
 
-        val text = when (status) {
-            TranslationStatus.MISSING -> "<缺失>"
-            TranslationStatus.EMPTY -> "<空>"
-            else -> value.row.values[value.locale].orEmpty()
-        }
-        val prefix = if (isSource) "" else "${status.marker} "
+        // 改进：缺失/空直接显示空字符串，不显示 <缺失> / <空>
+        val text = value.row.values[value.locale].orEmpty()
 
-        // 源语言列与已翻译项用正常色；空/缺失用灰色
+        // 源语言列与已翻译项用正常色；缺失/空用灰色（去掉状态标记 √）
         val dimmed = !isSource && status != TranslationStatus.TRANSLATED
 
-        val label = JLabel(prefix + text).apply {
+        val label = JLabel(text).apply {
             font = UIUtil.getLabelFont()
             foreground = when {
                 isSelected && table != null -> table.selectionForeground

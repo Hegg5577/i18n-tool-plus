@@ -64,7 +64,11 @@ class TranslationTablePanel(
         table.showHorizontalLines = false
         table.showVerticalLines = false
         table.selectionModel.selectionMode = ListSelectionModel.MULTIPLE_INTERVAL_SELECTION
-        table.tableHeader.reorderingAllowed = false
+
+        // 允许表头拖动，用户可以自由排序语言列的展示顺序
+        table.tableHeader.reorderingAllowed = true
+        table.tableHeader.resizingAllowed = true
+
         table.fillsViewportHeight = true
 
         table.selectionModel.addListSelectionListener { event ->
