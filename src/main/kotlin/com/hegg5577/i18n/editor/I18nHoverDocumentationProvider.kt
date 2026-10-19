@@ -2,8 +2,9 @@ package com.hegg5577.i18n.editor
 
 import com.intellij.lang.documentation.DocumentationProvider
 import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiFile
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.vfs.VirtualFileManager
 import com.hegg5577.i18n.locale.TranslationIndex
 import com.hegg5577.i18n.settings.I18nSettings
 import com.hegg5577.i18n.ui.Flags
@@ -15,13 +16,14 @@ import java.io.File
 /**
  * Hover 多语言预览。
  *
- * 当鼠标悬停在 `t('key')` 上时，显示所有语言的翻译。
- * 采用 HTML 格式，用 tab 切换不同语言，便于快速查看。
+ * 当按 Ctrl+Q 查看文档时，显示所有语言的翻译。
+ * 采用 HTML 格式，用点击链接打开编辑对话框。
  */
 class I18nHoverDocumentationProvider : DocumentationProvider {
 
-    init {
-        System.err.println("[I18nHoverDocumentationProvider] Initialized")
+    companion object {
+        var lastEditKey: String? = null
+        var lastEditProject: com.intellij.openapi.project.Project? = null
     }
 
     override fun getQuickNavigateInfo(element: PsiElement?, originalElement: PsiElement?): String? {
@@ -49,6 +51,10 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
             val project = context.project
             val settings = I18nSettings.getInstance(project)
             val projectRoot = File(project.basePath ?: return null)
+
+            // 保存信息以便在后续操作中使用
+            lastEditKey = key
+            lastEditProject = project
 
             ApplicationManager.getApplication().invokeLater {
                 try {
@@ -182,8 +188,8 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
 
         // 链接：打开 Key 编辑对话框
         val encodedKey = java.net.URLEncoder.encode(key, "UTF-8")
-        sb.append("<div style='margin-top: 8px; font-size: 12px;'>")
-        sb.append("<a href='i18n.edit?key=$encodedKey'>Edit this key</a>")
+        sb.append("<div style='margin-top: 12px;'>")
+        sb.append("<a href='i18n.edit?key=$encodedKey' style='color: #0066cc; text-decoration: underline; cursor: pointer; font-size: 13px;'>✎ Edit this key</a>")
         sb.append("</div>")
 
         sb.append("</body></html>")
@@ -202,4 +208,3 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
         return java.net.URLDecoder.decode(this, "UTF-8")
     }
 }
-
