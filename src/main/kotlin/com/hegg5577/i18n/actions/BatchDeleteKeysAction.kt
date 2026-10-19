@@ -44,7 +44,7 @@ class BatchDeleteKeysAction : AnAction() {
             project,
             BatchOperationDialog.OperationType.DELETE,
             selectedKeys,
-            context.displayLocales(),
+            context.displayLocales,
         )
 
         if (!dialog.showAndGet()) return

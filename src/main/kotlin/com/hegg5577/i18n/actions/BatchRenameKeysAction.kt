@@ -74,12 +74,14 @@ class BatchRenameKeysAction : AnAction() {
 
         if (result.isSuccess) {
             notify(project, "成功重命名 Key，可按 Ctrl+Z 撤销", NotificationType.INFORMATION)
-            RefreshPanelAction().actionPerformed(AnActionEvent.createEvent(
-                emptyMap(),
-                com.intellij.openapi.actionSystem.ActionPlaces.UNKNOWN,
-                "",
-                emptyMap(),
-            ))
+            RefreshPanelAction().actionPerformed(
+                AnActionEvent.createFromInputEvent(
+                    null,
+                    com.intellij.openapi.actionSystem.ActionPlaces.UNKNOWN,
+                    com.intellij.openapi.actionSystem.Presentation(),
+                    com.intellij.openapi.actionSystem.DataContext { null }
+                )
+            )
         } else {
             val message = buildString {
                 appendLine("重命名失败。详情：")
@@ -138,7 +140,7 @@ class BatchRenameKeysAction : AnAction() {
             project,
             BatchOperationDialog.OperationType.RENAME,
             keysToRename,
-            I18nContext.of(project).displayLocales(),
+            I18nContext.of(project).displayLocales,
         )
 
         if (!dialog.showAndGet()) return
