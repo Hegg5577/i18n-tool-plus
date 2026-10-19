@@ -1,18 +1,120 @@
 ---
 name: project-status
-description: i18n JetBrains 插件迁移进度和接下来的 coding 步骤
+description: i18n JetBrains 插件完整状态 - 功能 100%、UX 优化完成
 metadata:
   type: project
-  modified: 2026-10-19T14:30:00.000Z
+  modified: 2026-10-19T15:00:00.000Z
   packageName: com.hegg5577.i18n
 ---
 
-# i18n-ally-next → JetBrains 插件迁移 - 完成
+# i18n-ally-next → JetBrains 插件 - 完成并优化
 
 **项目所有者**: hegg5577  
 **包名**: com.hegg5577.i18n  
 **平台**: WebStorm/IDEA 2026.x  
-**功能完成度**: **100%** ✅
+**功能完成度**: **100%** ✅  
+**UX 优化**: **完成** ✨
+
+---
+
+## 🎯 最终状态
+
+- ✅ 全 18 阶段完成（含 4 个新功能）
+- ✅ 增量扫描、质量检查、PsiReference、代码生成已实现
+- ✅ 表头拖动排序、缺失值直接空着、项目独立配置已优化
+- ✅ 完全对标 VS Code i18n-ally-next
+- 🚀 **生产就绪** (Production Ready)
+
+---
+
+## 📈 完成的功能（18 + UX 优化）
+
+### 核心功能（已完成）
+- 🟢 多语言对照表 + 搜索过滤
+- 🟢 缺失/过期检测
+- 🟢 Key 编辑与批量操作
+- 🟢 多翻译引擎（Google/DeepL/OpenAI）
+- 🟢 硬编码字符串提取
+- 🟢 Hover 多语言预览
+- 🟢 Key 重命名与导航
+- 🟢 YAML 项目级配置
+- 🟢 增量扫描性能优化
+- 🟢 翻译质量检查（7 种检查项）
+- 🟢 PsiReference 完整集成
+- 🟢 TypeScript 代码生成
+
+### UX 优化（新增）
+- ✨ 表头拖动重排序 - 用户可自由调整语言列展示顺序
+- ✨ 去掉状态标记 - 缺失值直接空着，灰色显示，视觉清爽
+- ✨ 项目独立配置 - 每个项目用 .i18nrc.yml 独立配置
+
+---
+
+## 📚 关键文件位置
+
+| 功能 | 文件 | 说明 |
+|:-----|:-----|:-----|
+| **表头拖动** | `ui/TranslationTablePanel.kt:67` | 启用表头拖动重排 |
+| **去掉标记** | `ui/TranslationCellRenderer.kt:58-61` | 缺失值直接空着 |
+| **独立配置** | `settings/I18nSettings.kt` | 项目级 YAML 优先 |
+| **增量扫描** | `locale/IncrementalScanCache.kt` | VirtualFileListener |
+| **质量检查** | `translator/TranslationQualityChecker.kt` | 7 种检查项 |
+| **代码生成** | `generator/TypeScriptCodeGenerator.kt` | 3 种 TS 定义 |
+
+---
+
+## 📋 UX 改进对比
+
+| 功能 | 改进前 | 改进后 |
+|:-----|:--------|:-------|
+| **表头** | 固定顺序 | ✨ 可拖动排序 |
+| **状态标记** | 显示 √ 符号 | ✨ 直接空着 |
+| **缺失提示** | `<缺失>` 文本 | ✨ 灰色空格 |
+| **项目配置** | 全局共享 | ✨ 独立配置 |
+| **视觉** | 噪音较多 | ✨ 清爽简洁 |
+
+---
+
+## 🚀 最新提交
+
+```
+commit 520975b (HEAD -> master)
+refactor: 优化 UX - 表头拖动排序、去掉状态标记、项目独立配置
+
+前置提交:
+commit 25290a1
+feat: 完成最后 10% 功能 - 增量扫描、质量检查、PsiReference、代码生成
+```
+
+---
+
+## 📝 文档完整性
+
+- ✅ README.md - 用户使用指南
+- ✅ PROJECT_PROGRESS.md - 完整功能清单
+- ✅ YAML_CONFIG.md - 配置文件说明（含多项目示例）
+- ✅ NEW_FEATURES.md - 4 个新功能详解
+- ✅ QUICK_START_NEW_FEATURES.md - 快速开始
+- ✅ **UX_IMPROVEMENTS.md** - UX 改进说明（新增）
+
+---
+
+## 🎉 总结
+
+从原来的 90% 完成度（缺少 4 项功能）→ **100% 完成 + UX 优化**
+
+- 核心功能: 全部完成 ✅
+- 代码质量: 生产级 ✅
+- 单元测试: 关键模块覆盖 ✅
+- 文档齐全: 用户指南 + 快速开始 + 功能说明 ✅
+- UX 优化: 表头拖动 + 清爽界面 + 项目独立配置 ✅
+
+**可直接发布新版本** 🚀
+
+---
+
+**最后更新**: 2026-10-19 15:00 UTC  
+**状态**: 🟢 生产就绪
 
 ---
 
