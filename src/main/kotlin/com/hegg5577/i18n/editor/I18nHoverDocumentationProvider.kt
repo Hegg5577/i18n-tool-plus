@@ -3,10 +3,13 @@ package com.hegg5577.i18n.editor
 import com.intellij.lang.documentation.DocumentationProvider
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.openapi.application.ApplicationManager
 import com.hegg5577.i18n.locale.TranslationIndex
 import com.hegg5577.i18n.settings.I18nSettings
-import com.hegg5577.i18n.ui.KeyEditorDialog
 import com.hegg5577.i18n.ui.Flags
+import com.hegg5577.i18n.ui.KeyEditorDialog
+import com.hegg5577.i18n.locale.LocaleRepository
+import com.hegg5577.i18n.locale.KeyStyle
 import java.io.File
 
 /**
@@ -32,42 +35,53 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
         link: String?,
         context: PsiElement?,
     ): PsiElement? {
-        // 处理 "i18n.edit?key=xxx" 链接
-        if (link?.startsWith("i18n.edit?key=") == true) {
-            val key = link.substringAfter("key=")
-            context?.let { element ->
-                val project = element.project
+        // 处理 i18n.edit?key=xxx 链接
+        if (link != null && context != null && link.startsWith("i18n.edit?key=")) {
+            try {
+                val key = link.substringAfter("key=").urlDecode()
+                val project = context.project
                 val settings = I18nSettings.getInstance(project)
+                val projectRoot = File(project.basePath ?: return null)
 
-                // 从 TranslationIndex 获取完整的数据
-                val repo = com.hegg5577.i18n.locale.LocaleRepository(
-                    File(project.basePath ?: ""),
-                    settings.localesPath,
-                    settings.state.pathMatcher,
-                    com.hegg5577.i18n.locale.KeyStyle.NESTED,
-                )
+                ApplicationManager.getApplication().invokeLater {
+                    try {
+                        // 使用 LocaleRepository 获取完整的数据
+                        val repo = LocaleRepository(
+                            projectRoot,
+                            settings.localesPath,
+                            settings.state.pathMatcher,
+                            KeyStyle.NESTED,
+                        )
 
-                // 获取所有语言的文件和值
-                val locales = repo.scanLocales()
-                val values = mutableMapOf<String, String?>()
-                val localeFiles = mutableMapOf<String, File>()
+                        val locales = repo.scanLocales()
+                        val values = mutableMapOf<String, String?>()
+                        val localeFiles = mutableMapOf<String, File>()
+                        val allLocales = settings.state.displayLocales.ifEmpty { listOf(settings.sourceLocale) }
 
-                for (localeKeys in locales) {
-                    values[localeKeys.locale] = localeKeys.keys.firstOrNull { it == key }?.let { key }
-                    localeFiles[localeKeys.locale] = localeKeys.file
+                        // 收集所有语言的值和文件
+                        for (localeKeys in locales) {
+                            val value = localeKeys.keys.find { it == key }
+                            values[localeKeys.locale] = value
+                            localeFiles[localeKeys.locale] = localeKeys.file
+                        }
+
+                        // 打开编辑对话框
+                        val dialog = KeyEditorDialog(
+                            project = project,
+                            key = key,
+                            sourceLocale = settings.sourceLocale,
+                            values = values,
+                            locales = allLocales,
+                            localeFiles = localeFiles,
+                            onSaved = { /* 刷新 UI */ }
+                        )
+                        dialog.show()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
-
-                // 打开编辑对话框
-                val dialog = KeyEditorDialog(
-                    project = project,
-                    key = key,
-                    sourceLocale = settings.sourceLocale,
-                    values = values,
-                    locales = settings.state.displayLocales.ifEmpty { listOf(settings.sourceLocale) },
-                    localeFiles = localeFiles,
-                    onSaved = { /* 刷新 */ }
-                )
-                dialog.show()
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
         return null
@@ -123,7 +137,7 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
         sb.append("<html><body style='font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;'>")
 
         // 标题
-        sb.append("<div style='margin-bottom: 8px;'><b>i18n Key:</b> <code>$key</code></div>")
+        sb.append("<div style='margin-bottom: 8px;'><b>i18n Key:</b> <code>${escapeHtml(key)}</code></div>")
 
         // 翻译表格
         sb.append("<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse;'>")
@@ -144,8 +158,9 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
         sb.append("</table>")
 
         // 链接：打开 Key 编辑对话框
+        val encodedKey = java.net.URLEncoder.encode(key, "UTF-8")
         sb.append("<div style='margin-top: 8px; font-size: 12px;'>")
-        sb.append("<a href='i18n.edit?key=$key'>Edit this key</a>")
+        sb.append("<a href='i18n.edit?key=$encodedKey'>Edit this key</a>")
         sb.append("</div>")
 
         sb.append("</body></html>")
@@ -158,6 +173,10 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
             .replace(">", "&gt;")
             .replace("\"", "&quot;")
             .replace("'", "&#39;")
+    }
+
+    private fun String.urlDecode(): String {
+        return java.net.URLDecoder.decode(this, "UTF-8")
     }
 }
 
