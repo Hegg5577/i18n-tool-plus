@@ -6,7 +6,7 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.19.0"
 }
 
-group = "com.up3d.i18n"
+group = "com.hegg5577.i18n"
 version = "0.1.0"
 
 repositories {
