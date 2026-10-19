@@ -191,6 +191,9 @@ class I18nToolWindowFactory : ToolWindowFactory {
         val service = project.getService(I18nPanelService::class.java)
         val panel = TranslationTablePanel("en", emptyList())
 
+        // 双击某行 -> 打开 key 编辑弹窗
+        panel.onEditKey = { key -> openKeyEditor(project, key, service) }
+
         val manager = ContentFactory.getInstance()
         val content = manager.createContent(panel, "翻译对照", false)
         toolWindow.contentManager.addContent(content)
@@ -211,6 +214,8 @@ class I18nToolWindowFactory : ToolWindowFactory {
                 definedCount = snapshot.definedCount,
                 usedCount = snapshot.usedCount,
             )
+            // 缺失列表双击同样能编辑：既然检测出来了，就该能就地补齐
+            missingPanel.onEditKey = { key -> openKeyEditor(project, key, service) }
         }
 
         Disposer.register(toolWindow.disposable) { unsubscribe() }
@@ -218,6 +223,35 @@ class I18nToolWindowFactory : ToolWindowFactory {
     }
 
     override fun shouldBeAvailable(project: Project): Boolean = true
+}
+
+/**
+ * 打开 key 编辑弹窗。
+ *
+ * 从面板服务读当前数据而不是重新扫盘：用户刚刷新过，数据是最新的，
+ * 也避免每次双击都重新遍历项目。
+ */
+private fun openKeyEditor(project: Project, key: String, service: I18nPanelService) {
+    val context = I18nContext.of(project)
+    val repo = context.repository() ?: return
+    val snapshot = service.snapshot()
+
+    val locales = snapshot.displayLocales
+    // 缺失的 key 用 null 表示「语言包里根本没有」，弹窗据此提示"保存后创建"
+    val values: Map<String, String?> = locales.associateWith { repo.valuesOf(it)[key] }
+
+    KeyEditorDialog(
+        project = project,
+        key = key,
+        sourceLocale = snapshot.sourceLocale,
+        values = values,
+        locales = locales,
+        localeFiles = locales.mapNotNull { l -> repo.localeFile(l)?.let { l to it } }.toMap(),
+        onSaved = {
+            // 保存后立即刷新，让用户看到状态变化
+            service.refresh()
+        },
+    ).show()
 }
 
 /** 便捷入口：主动打开侧边栏面板。 */

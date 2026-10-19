@@ -26,12 +26,26 @@ import javax.swing.ListSelectionModel
  */
 class MissingKeysPanel : JPanel(BorderLayout()) {
 
+    /** 双击缺失项时回调，参数为 key。检测出来了就该能直接补上。 */
+    var onEditKey: ((String) -> Unit)? = null
+
     private val missingListModel = DefaultListModel<String>()
     private val unusedListModel = DefaultListModel<String>()
 
     private val missingList = JList(missingListModel).apply {
         selectionMode = ListSelectionModel.SINGLE_SELECTION
         cellRenderer = MissingCellRenderer()
+        addMouseListener(object : java.awt.event.MouseAdapter() {
+            override fun mouseClicked(e: java.awt.event.MouseEvent) {
+                if (e.clickCount != 2 || e.button != java.awt.event.MouseEvent.BUTTON1) return
+                val index = locationToIndex(e.point)
+                if (index < 0) return
+                val raw = missingListModel[index]
+                // 显示文本是 "key    (N 处)"，这里取回纯 key
+                val key = raw.substringBefore("(").trim()
+                onEditKey?.invoke(key)
+            }
+        })
     }
 
     private val unusedList = JList(unusedListModel).apply {
@@ -74,6 +88,8 @@ class MissingKeysPanel : JPanel(BorderLayout()) {
             append("，多余 ${unused.size} 个。")
             if (missing.isEmpty() && unused.isEmpty()) {
                 append("  没有发现问题。")
+            } else if (missing.isNotEmpty()) {
+                append("  双击缺失项可直接补写译文。")
             }
         }
     }

@@ -377,24 +377,26 @@ object JsLocaleParser {
         return out.toString()
     }
 
-    /** 去掉对象/数组末尾的多余逗号，否则不是合法 JSON。 */
+    /** 去掉对象 / 数组末尾的多余逗号，否则不是合法 JSON。 */
     private fun removeTrailingCommas(body: String): String {
         val out = StringBuilder(body.length)
         var quote: Char? = null
+        var i = 0
 
-        for (i in body.indices) {
+        // 用while 而非 for：转义序列要连着吃掉两个字符，
+        // for 会把已被吃掉的那个字符再处理一遍 ——
+        // 结果是 \"hi\" 里的引号被误判为字符串结束，反斜杠也被丢掉
+        while (i < body.length) {
             val c = body[i]
             when {
                 quote != null -> {
-                    out.append(c)
                     if (c == '\\' && i + 1 < body.length) {
-                        out.append(body[i + 1])
-                        // 跳过已追加的转义字符
-                        out.deleteCharAt(out.length - 1)
-                        out.append(body[i + 1])
-                    } else if (c == quote) {
-                        quote = null
+                        out.append(c).append(body[i + 1])
+                        i += 2
+                        continue
                     }
+                    out.append(c)
+                    if (c == quote) quote = null
                 }
                 c == '\'' || c == '"' || c == '`' -> {
                     quote = c
@@ -404,11 +406,15 @@ object JsLocaleParser {
                     // 找到下一个非空白字符，若是 } 或 ] 就丢掉这个逗号
                     var j = i + 1
                     while (j < body.length && body[j].isWhitespace()) j++
-                    if (j < body.length && (body[j] == '}' || body[j] == ']')) continue
+                    if (j < body.length && (body[j] == '}' || body[j] == ']')) {
+                        i++
+                        continue
+                    }
                     out.append(c)
                 }
                 else -> out.append(c)
             }
+            i++
         }
         return out.toString()
     }

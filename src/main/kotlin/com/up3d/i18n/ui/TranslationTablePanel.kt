@@ -44,6 +44,9 @@ class TranslationTablePanel(
     var selectedKey: String? = null
         private set
 
+    /** 双击某行时回调，参数为该行的 key。用于打开 key 编辑弹窗。 */
+    var onEditKey: ((String) -> Unit)? = null
+
     private val searchField = SearchTextField()
     private val statusLabel = JLabel()
 
@@ -70,6 +73,19 @@ class TranslationTablePanel(
 
         table.setDefaultRenderer(Any::class.java, renderer)
         renderer.sourceLocale = sourceLocale
+
+        // 双击打开 key 编辑弹窗，对齐原版「点 key 展开多语言对照」的交互
+        table.addMouseListener(object : java.awt.event.MouseAdapter() {
+            override fun mouseClicked(e: java.awt.event.MouseEvent) {
+                if (e.clickCount == 2 && e.button == java.awt.event.MouseEvent.BUTTON1) {
+                    val row = table.rowAtPoint(e.point)
+                    if (row >= 0) {
+                        selectedKey = model.rowAt(row)?.key
+                        selectedKey?.let { onEditKey?.invoke(it) }
+                    }
+                }
+            }
+        })
     }
 
     /** 顶部工具栏：搜索框 + 三个状态过滤按钮。 */
