@@ -23,6 +23,20 @@
                            displayType="BALLOON"
                            isLogByDefault="true"/>
 
+        <!-- PsiReference 支持：识别 t('key') 中的 key 引用 -->
+        <psi.referenceContributor
+                implementation="com.up3d.i18n.editor.I18nPsiReferenceContributor"
+                language="JavaScript"/>
+        <psi.referenceContributor
+                implementation="com.up3d.i18n.editor.I18nPsiReferenceContributor"
+                language="TypeScript"/>
+        <psi.referenceContributor
+                implementation="com.up3d.i18n.editor.I18nPsiReferenceContributor"
+                language="HTML"/>
+        <psi.referenceContributor
+                implementation="com.up3d.i18n.editor.I18nPsiReferenceContributor"
+                language="Vue"/>
+
         <!-- 行内译文提示：在 t('key') 之后显示对应语言的译文。
              覆盖 js / jsx / ts / tsx / vue / html，语言清单见 I18nInlayProviderFactory。 -->
         <codeInsight.declarativeInlayProviderFactory
