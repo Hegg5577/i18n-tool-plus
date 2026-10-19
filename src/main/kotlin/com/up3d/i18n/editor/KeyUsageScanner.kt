@@ -1,4 +1,4 @@
-package com.up3d.i18n.editor
+package com.hegg5577.i18n.editor
 
 /**
  * `t('key')` 用法扫描：在文件文本里找出所有待提示的位置。

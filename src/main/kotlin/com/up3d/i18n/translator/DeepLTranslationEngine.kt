@@ -1,4 +1,4 @@
-package com.up3d.i18n.translator
+package com.hegg5577.i18n.translator
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser

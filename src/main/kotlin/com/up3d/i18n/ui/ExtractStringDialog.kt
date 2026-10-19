@@ -1,4 +1,4 @@
-package com.up3d.i18n.ui
+package com.hegg5577.i18n.ui
 
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.ValidationInfo
@@ -7,7 +7,7 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
-import com.up3d.i18n.locale.LocaleRepository
+import com.hegg5577.i18n.locale.LocaleRepository
 import java.awt.BorderLayout
 import java.awt.Dimension
 import javax.swing.JComponent

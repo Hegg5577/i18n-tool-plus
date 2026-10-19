@@ -1,4 +1,4 @@
-package com.up3d.i18n.actions
+package com.hegg5577.i18n.actions
 
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
@@ -9,7 +9,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.refactoring.RefactoringActionHandler
 import com.intellij.refactoring.actions.BaseRefactoringAction
-import com.up3d.i18n.settings.I18nContext
+import com.hegg5577.i18n.settings.I18nContext
 
 /**
  * i18n Key 重命名 Action。
@@ -120,7 +120,7 @@ class I18nRenameKeyHandler : RefactoringActionHandler {
                 changes[locale] = mapOf(newKey to value)
             }
 
-            val result = com.up3d.i18n.locale.TranslationSaver.save(project, repo, context.sourceLocale, changes)
+            val result = com.hegg5577.i18n.locale.TranslationSaver.save(project, repo, context.sourceLocale, changes)
             if (!result.isSuccess) {
                 val detail = result.failed.entries.joinToString("；") { "${it.key}: ${it.value}" }
                 Messages.showErrorDialog(project, "Failed to save:\n$detail", "Rename Failed")
@@ -128,7 +128,7 @@ class I18nRenameKeyHandler : RefactoringActionHandler {
                 Messages.showInfoMessage(project, "✓ Renamed '$oldKey' to '$newKey'", "Rename Complete")
 
                 // 刷新 UI
-                project.getService(com.up3d.i18n.ui.I18nPanelService::class.java).refresh()
+                project.getService(com.hegg5577.i18n.ui.I18nPanelService::class.java).refresh()
             }
         } catch (e: Exception) {
             Messages.showErrorDialog(project, "Rename failed: ${e.message}", "Rename Error")

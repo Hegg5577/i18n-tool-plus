@@ -1,7 +1,7 @@
-package com.up3d.i18n.locale
+package com.hegg5577.i18n.locale
 
-import com.up3d.i18n.editor.DefaultPatterns
-import com.up3d.i18n.editor.KeyUsageScanner
+import com.hegg5577.i18n.editor.DefaultPatterns
+import com.hegg5577.i18n.editor.KeyUsageScanner
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

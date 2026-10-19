@@ -1,4 +1,4 @@
-﻿package com.up3d.i18n.locale
+﻿package com.hegg5577.i18n.locale
 
 interface LocaleWriter {
     fun read(): Map<String, String>

@@ -1,4 +1,4 @@
-package com.up3d.i18n.ui
+package com.hegg5577.i18n.ui
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
@@ -7,8 +7,8 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.content.ContentFactory
-import com.up3d.i18n.locale.LocaleKeys
-import com.up3d.i18n.settings.I18nContext
+import com.hegg5577.i18n.locale.LocaleKeys
+import com.hegg5577.i18n.settings.I18nContext
 
 /**
  * 侧边栏「i18n」面板的数据服务。
@@ -142,12 +142,12 @@ class I18nPanelService(private val project: Project) {
 
         // 扫描代码里实际用到的 key，与语言包比对找出「缺失」与「多余」
         val usage = runCatching {
-            com.up3d.i18n.locale.UsageScanner.analyze(
+            com.hegg5577.i18n.locale.UsageScanner.analyze(
                 projectRoot = root,
                 localesDir = context.localesPath,
                 pathMatcher = context.pathMatcher,
                 keyStyle = context.keyStyle,
-                sourceDirs = context.sourceDirs.ifEmpty { com.up3d.i18n.locale.DEFAULT_SOURCE_DIRS },
+                sourceDirs = context.sourceDirs.ifEmpty { com.hegg5577.i18n.locale.DEFAULT_SOURCE_DIRS },
                 extensions = context.supportedExtensions,
                 customPatterns = context.usageMatchRegex,
             )
@@ -378,7 +378,7 @@ private fun showDiagnoseDialog(project: Project) {
  */
 private fun Project.showSettingsEditor() {
     com.intellij.openapi.options.ShowSettingsUtil.getInstance()
-        .showSettingsDialog(this, com.up3d.i18n.settings.I18nConfigurable::class.java)
+        .showSettingsDialog(this, com.hegg5577.i18n.settings.I18nConfigurable::class.java)
 }
 
 /** 便捷入口：主动打开侧边栏面板。 */

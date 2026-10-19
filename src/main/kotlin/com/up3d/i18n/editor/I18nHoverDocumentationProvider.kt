@@ -1,11 +1,11 @@
-package com.up3d.i18n.editor
+package com.hegg5577.i18n.editor
 
 import com.intellij.lang.documentation.DocumentationProvider
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
-import com.up3d.i18n.locale.TranslationIndex
-import com.up3d.i18n.settings.I18nContext
-import com.up3d.i18n.ui.Flags
+import com.hegg5577.i18n.locale.TranslationIndex
+import com.hegg5577.i18n.settings.I18nContext
+import com.hegg5577.i18n.ui.Flags
 
 /**
  * Hover 多语言预览。

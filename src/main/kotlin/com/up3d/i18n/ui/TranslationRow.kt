@@ -1,4 +1,4 @@
-package com.up3d.i18n.ui
+package com.hegg5577.i18n.ui
 
 /**
  * 一条 key 在各语言下的翻译情况，是对照表的一行。

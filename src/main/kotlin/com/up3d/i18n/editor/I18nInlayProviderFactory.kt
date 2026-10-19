@@ -1,4 +1,4 @@
-package com.up3d.i18n.editor
+package com.hegg5577.i18n.editor
 
 import com.intellij.codeInsight.hints.declarative.InlayHintsCollector
 import com.intellij.codeInsight.hints.declarative.InlayHintsProvider

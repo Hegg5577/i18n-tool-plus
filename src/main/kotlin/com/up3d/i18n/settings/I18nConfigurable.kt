@@ -1,4 +1,4 @@
-package com.up3d.i18n.settings
+package com.hegg5577.i18n.settings
 
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.Project
@@ -168,8 +168,8 @@ class I18nConfigurable(private val project: Project) : Configurable {
         translationEnginePanel.apply()
 
         // 配置变了，缓存必须失效，否则面板与行内提示还显示旧数据
-        com.up3d.i18n.locale.TranslationIndex.invalidate()
-        project.getService(com.up3d.i18n.ui.I18nPanelService::class.java).refresh()
+        com.hegg5577.i18n.locale.TranslationIndex.invalidate()
+        project.getService(com.hegg5577.i18n.ui.I18nPanelService::class.java).refresh()
     }
 
     override fun isModified(): Boolean {

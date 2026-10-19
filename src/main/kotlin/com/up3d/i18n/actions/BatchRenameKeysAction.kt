@@ -1,4 +1,4 @@
-package com.up3d.i18n.actions
+package com.hegg5577.i18n.actions
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -7,11 +7,11 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.InputValidator
 import com.intellij.openapi.ui.Messages
-import com.up3d.i18n.locale.LocaleRepository
-import com.up3d.i18n.locale.TranslationSaver
-import com.up3d.i18n.settings.I18nContext
-import com.up3d.i18n.ui.BatchOperationDialog
-import com.up3d.i18n.ui.TranslationTablePanel
+import com.hegg5577.i18n.locale.LocaleRepository
+import com.hegg5577.i18n.locale.TranslationSaver
+import com.hegg5577.i18n.settings.I18nContext
+import com.hegg5577.i18n.ui.BatchOperationDialog
+import com.hegg5577.i18n.ui.TranslationTablePanel
 
 /**
  * 批量重命名选中的 Key。

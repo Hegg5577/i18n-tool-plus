@@ -1,4 +1,4 @@
-package com.up3d.i18n.actions
+package com.hegg5577.i18n.actions
 
 import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.openapi.editor.Editor
@@ -6,9 +6,9 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.util.IncorrectOperationException
-import com.up3d.i18n.locale.LocaleRepository
-import com.up3d.i18n.settings.I18nContext
-import com.up3d.i18n.ui.ExtractStringDialog
+import com.hegg5577.i18n.locale.LocaleRepository
+import com.hegg5577.i18n.settings.I18nContext
+import com.hegg5577.i18n.ui.ExtractStringDialog
 import java.io.File
 
 /**
@@ -110,7 +110,7 @@ class ExtractStringIntention : IntentionAction {
             changes[locale] = mapOf(key to value)
         }
 
-        val result = com.up3d.i18n.locale.TranslationSaver.save(project, repo, sourceLocale, changes)
+        val result = com.hegg5577.i18n.locale.TranslationSaver.save(project, repo, sourceLocale, changes)
         if (!result.isSuccess) {
             val detail = result.failed.entries.joinToString("；") { "${it.key}: ${it.value}" }
             com.intellij.openapi.ui.Messages.showErrorDialog(

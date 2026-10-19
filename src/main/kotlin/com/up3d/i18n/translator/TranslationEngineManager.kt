@@ -1,8 +1,8 @@
-package com.up3d.i18n.translator
+package com.hegg5577.i18n.translator
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
-import com.up3d.i18n.settings.I18nContext
+import com.hegg5577.i18n.settings.I18nContext
 
 /**
  * 翻译引擎工厂与管理器。

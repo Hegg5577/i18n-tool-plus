@@ -1,11 +1,11 @@
-package com.up3d.i18n.actions
+package com.hegg5577.i18n.actions
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.up3d.i18n.ui.I18nPanelService
-import com.up3d.i18n.ui.showI18nToolWindow
+import com.hegg5577.i18n.ui.I18nPanelService
+import com.hegg5577.i18n.ui.showI18nToolWindow
 
 /** 重新扫描语言包并刷新侧边栏表格。 */
 class RefreshPanelAction : AnAction() {

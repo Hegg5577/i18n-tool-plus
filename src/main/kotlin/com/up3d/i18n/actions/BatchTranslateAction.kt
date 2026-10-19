@@ -1,4 +1,4 @@
-package com.up3d.i18n.actions
+package com.hegg5577.i18n.actions
 
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -15,12 +15,12 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
-import com.up3d.i18n.locale.LocaleFileWriter
-import com.up3d.i18n.locale.LocaleRepository
-import com.up3d.i18n.translator.GoogleTranslationEngine
-import com.up3d.i18n.translator.PlaceholderProtector
-import com.up3d.i18n.translator.TranslationEngine
-import com.up3d.i18n.translator.TranslationException
+import com.hegg5577.i18n.locale.LocaleFileWriter
+import com.hegg5577.i18n.locale.LocaleRepository
+import com.hegg5577.i18n.translator.GoogleTranslationEngine
+import com.hegg5577.i18n.translator.PlaceholderProtector
+import com.hegg5577.i18n.translator.TranslationEngine
+import com.hegg5577.i18n.translator.TranslationException
 import java.io.File
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -54,7 +54,7 @@ class BatchTranslateAction : AnAction() {
             return
         }
 
-        val context = com.up3d.i18n.settings.I18nContext.of(project)
+        val context = com.hegg5577.i18n.settings.I18nContext.of(project)
         val repository = context.repository() ?: return
         val report = repository.buildReport(context.sourceLocale)
         if (report.isEmpty) {

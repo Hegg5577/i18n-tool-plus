@@ -1,9 +1,9 @@
-package com.up3d.i18n.settings
+package com.hegg5577.i18n.settings
 
 import com.intellij.openapi.project.Project
-import com.up3d.i18n.locale.KeyStyle
-import com.up3d.i18n.locale.LocaleRepository
-import com.up3d.i18n.locale.PathMatcher
+import com.hegg5577.i18n.locale.KeyStyle
+import com.hegg5577.i18n.locale.LocaleRepository
+import com.hegg5577.i18n.locale.PathMatcher
 import java.io.File
 
 /**

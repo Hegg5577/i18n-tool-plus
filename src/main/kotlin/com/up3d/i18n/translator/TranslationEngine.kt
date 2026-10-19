@@ -1,4 +1,4 @@
-package com.up3d.i18n.translator
+package com.hegg5577.i18n.translator
 
 /** 翻译失败：网络不可达、被限流、响应格式异常等都归一到这一类。 */
 class TranslationException(message: String, cause: Throwable? = null) : Exception(message, cause)

@@ -1,4 +1,4 @@
-package com.up3d.i18n.settings
+package com.hegg5577.i18n.settings
 
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.Service
@@ -6,7 +6,7 @@ import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.project.Project
 import com.intellij.util.xmlb.XmlSerializerUtil
-import com.up3d.i18n.config.I18nYamlConfigLoader
+import com.hegg5577.i18n.config.I18nYamlConfigLoader
 
 /**
  * 项目级 i18n 配置。

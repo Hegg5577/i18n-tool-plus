@@ -1,4 +1,4 @@
-package com.up3d.i18n.ui
+package com.hegg5577.i18n.ui
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper

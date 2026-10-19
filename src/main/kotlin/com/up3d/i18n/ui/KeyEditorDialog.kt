@@ -1,4 +1,4 @@
-package com.up3d.i18n.ui
+package com.hegg5577.i18n.ui
 
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
@@ -10,10 +10,10 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
-import com.up3d.i18n.locale.TranslationSaver
-import com.up3d.i18n.translator.PlaceholderProtector
-import com.up3d.i18n.translator.TranslationEngineManager
-import com.up3d.i18n.translator.TranslationException
+import com.hegg5577.i18n.locale.TranslationSaver
+import com.hegg5577.i18n.translator.PlaceholderProtector
+import com.hegg5577.i18n.translator.TranslationEngineManager
+import com.hegg5577.i18n.translator.TranslationException
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Dimension
@@ -285,11 +285,11 @@ class KeyEditorDialog(
         }
 
         if (changes.isNotEmpty()) {
-            val repo = com.up3d.i18n.locale.LocaleRepository(
+            val repo = com.hegg5577.i18n.locale.LocaleRepository(
                 projectRoot = project.basePath?.let(::File) ?: return,
-                localesDir = com.up3d.i18n.settings.I18nContext.of(project).localesPath,
-                pathMatcher = com.up3d.i18n.settings.I18nContext.of(project).pathMatcher,
-                keyStyle = com.up3d.i18n.settings.I18nContext.of(project).keyStyle,
+                localesDir = com.hegg5577.i18n.settings.I18nContext.of(project).localesPath,
+                pathMatcher = com.hegg5577.i18n.settings.I18nContext.of(project).pathMatcher,
+                keyStyle = com.hegg5577.i18n.settings.I18nContext.of(project).keyStyle,
             )
             val result = TranslationSaver.save(project, repo, sourceLocale, changes)
 

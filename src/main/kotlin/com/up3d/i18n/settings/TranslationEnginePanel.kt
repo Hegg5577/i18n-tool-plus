@@ -1,4 +1,4 @@
-package com.up3d.i18n.settings
+package com.hegg5577.i18n.settings
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
@@ -9,10 +9,10 @@ import com.intellij.ui.components.JBPasswordField
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
-import com.up3d.i18n.translator.DeepLTranslationEngine
-import com.up3d.i18n.translator.GoogleTranslationEngine
-import com.up3d.i18n.translator.OpenAITranslationEngine
-import com.up3d.i18n.translator.TranslationException
+import com.hegg5577.i18n.translator.DeepLTranslationEngine
+import com.hegg5577.i18n.translator.GoogleTranslationEngine
+import com.hegg5577.i18n.translator.OpenAITranslationEngine
+import com.hegg5577.i18n.translator.TranslationException
 import javax.swing.DefaultComboBoxModel
 import javax.swing.JComponent
 import javax.swing.JPanel

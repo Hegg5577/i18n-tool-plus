@@ -1,4 +1,4 @@
-package com.up3d.i18n.translator
+package com.hegg5577.i18n.translator
 
 /**
  * 占位符保护：翻译前把「不能被翻译引擎改写」的片段替换成占位 token，翻译后还原。

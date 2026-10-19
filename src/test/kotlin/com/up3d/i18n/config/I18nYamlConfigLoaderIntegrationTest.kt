@@ -1,4 +1,4 @@
-package com.up3d.i18n.config
+package com.hegg5577.i18n.config
 
 import java.io.File
 import java.nio.file.Files

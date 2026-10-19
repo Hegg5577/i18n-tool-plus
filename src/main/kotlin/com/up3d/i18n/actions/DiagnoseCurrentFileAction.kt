@@ -1,4 +1,4 @@
-package com.up3d.i18n.actions
+package com.hegg5577.i18n.actions
 
 import com.intellij.codeInsight.hints.declarative.InlayHintsProviderFactory
 import com.intellij.openapi.actionSystem.AnAction
@@ -8,12 +8,12 @@ import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.psi.PsiFile
-import com.up3d.i18n.editor.I18nInlayCollector
-import com.up3d.i18n.editor.I18nInlayProviderFactory
-import com.up3d.i18n.editor.KeyUsageScanner
-import com.up3d.i18n.locale.TranslationIndex
-import com.up3d.i18n.ui.DiagnosticDialog
-import com.up3d.i18n.ui.DiagnosticItem
+import com.hegg5577.i18n.editor.I18nInlayCollector
+import com.hegg5577.i18n.editor.I18nInlayProviderFactory
+import com.hegg5577.i18n.editor.KeyUsageScanner
+import com.hegg5577.i18n.locale.TranslationIndex
+import com.hegg5577.i18n.ui.DiagnosticDialog
+import com.hegg5577.i18n.ui.DiagnosticItem
 
 /**
  * 诊断当前文件的行内译文提示链路。
