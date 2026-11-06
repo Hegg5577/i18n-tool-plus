@@ -108,6 +108,7 @@
         <!-- 侧边栏 i18n 面板：多语言对照表 + 翻译进度。 -->
         <toolWindow id="i18n-helper"
                     anchor="right"
+                    icon="icons/pluginIcon.svg"
                     factoryClass="com.hegg5577.i18n.ui.I18nToolWindowFactory"/>
     </extensions>
 
