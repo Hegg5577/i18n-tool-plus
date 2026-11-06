@@ -3,29 +3,38 @@
     <id>com.hegg5577.i18n.helper</id>
     <name>i18n tool plus</name>
     <vendor>hegg5577</vendor>
+    <icon path="icons/pluginIcon.svg"/>
 
     <description><![CDATA[
-    Manage localization files, preview translations in your code, and edit multilingual keys in JetBrains IDEs.<br/>
-    <b>Features:</b>
+    <b>i18n tool plus</b> is a smart i18n assistant for JetBrains IDEs.
+    Manage locale files, preview translations directly in your code, and edit multilingual keys — all in one place.
+
+    <h3>✨ Key Features</h3>
     <ul>
-      <li>Compare and edit translations across multiple languages.</li>
-      <li>Preview translations with inline hints and hover documentation.</li>
-      <li>Find missing and unused keys, and perform bulk key operations.</li>
-      <li>Translate with Google, DeepL, or OpenAI using your configured service.</li>
-      <li>Configure locale paths and source scanning through IDE settings or .i18nrc.yml.</li>
+      <li><b>Multilingual table</b> — side panel comparing translation status across every language at a glance.</li>
+      <li><b>Inline translation preview</b> — see the translated text right after <code>t('key')</code>, hover to preview all languages.</li>
+      <li><b>Missing &amp; unused key detection</b> — catch keys referenced in code but missing from locale files, plus dead keys.</li>
+      <li><b>One-click editing</b> — double-click any key to edit every language in a single dialog.</li>
+      <li><b>Machine translation</b> — Google Translate, DeepL, and OpenAI built in for bulk filling.</li>
+      <li><b>Hardcoded string extraction</b> — extract strings into i18n keys with Alt+Enter.</li>
+      <li><b>Type-safe generation</b> — generate TypeScript types, schemas, and Vue 3 composables from your keys.</li>
+      <li><b>Translation quality checks</b> — verify placeholder consistency and parameter counts.</li>
+      <li><b>Flexible configuration</b> — IDE settings or a project-level <code>.i18nrc.yml</code>.</li>
     </ul>
-    <b>中文介绍：</b><br/>
-    前端国际化（i18n）辅助插件，提供语言包管理、翻译预览与编辑功能。<br/>
-    <b>核心功能：</b>
+
+    <h3>🌐 Supported Frameworks &amp; Files</h3>
+    <p>i18next · vue-i18n · react-i18next · i18n-js · js / jsx / ts / tsx / vue / html</p>
+
+    <h3>中文介绍</h3>
+    <p>前端国际化（i18n）辅助插件，提供语言包管理、翻译预览与编辑功能。</p>
     <ul>
-      <li>📋 多语言对照表 - 侧边栏展示所有语言的翻译状态</li>
-      <li>🔍 智能检测 - 自动识别缺失/过期/未使用的 key</li>
-      <li>✏️ 便捷编辑 - 双击编辑、一键提取、批量操作</li>
-      <li>🌐 多引擎翻译 - Google / DeepL / OpenAI 支持</li>
-      <li>⚙️ 灵活配置 - 全局 Settings + 项目级 .i18nrc.yml</li>
-      <li>🎯 编辑器集成 - Hover 预览、行内译文、Key 重命名操作</li>
+      <li>📋 多语言对照表 —— 侧边栏展示所有语言的翻译状态</li>
+      <li>🔍 智能检测 —— 自动识别缺失 / 过期 / 未使用的 key</li>
+      <li>✏️ 便捷编辑 —— 双击编辑、一键提取、批量操作</li>
+      <li>🌐 多引擎翻译 —— Google / DeepL / OpenAI 支持</li>
+      <li>⚙️ 灵活配置 —— 全局 Settings + 项目级 .i18nrc.yml</li>
+      <li>🎯 编辑器集成 —— Hover 预览、行内译文、Key 重命名</li>
     </ul>
-    支持 i18next、vue-i18n、react-i18next、i18n-js 等框架，覆盖 js/jsx/ts/tsx/vue/html。
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

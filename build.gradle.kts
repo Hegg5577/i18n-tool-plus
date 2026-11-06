@@ -57,6 +57,18 @@ intellijPlatform {
             sinceBuild = "261"
             untilBuild = "263.*"
         }
+        changeNotes = """
+            <h3>0.1.3</h3>
+            <ul>
+              <li>Support WebStorm 2026.3 and newer.</li>
+              <li>Fix UI freeze when auto-translating inside the key editor.</li>
+              <li>Enable JetBrains Marketplace error reporting for exceptions and UI freezes.</li>
+            </ul>
+            <h3>0.1.2</h3>
+            <ul>
+              <li>Initial public version with multilingual table, inline preview, and key editing.</li>
+            </ul>
+        """.trimIndent()
     }
     // 跳过"启动 IDE 索引配置项"这一步，显著加快本地迭代
     buildSearchableOptions = false
