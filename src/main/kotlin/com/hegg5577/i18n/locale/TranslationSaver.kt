@@ -1,15 +1,15 @@
-﻿package com.hegg5577.i18n.locale
+package com.hegg5577.i18n.locale
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.openapi.vfs.VirtualFile
 import java.io.File
 
+/** 统一准备语言包修改，全部校验通过后才在一个撤销命令中提交。 */
 object TranslationSaver {
-
     data class Result(
         val succeeded: List<String> = emptyList(),
         val failed: Map<String, String> = emptyMap(),
@@ -17,287 +17,163 @@ object TranslationSaver {
         val isSuccess: Boolean get() = failed.isEmpty() && succeeded.isNotEmpty()
     }
 
+    /** 按 key 所属文件保存，缺失译文沿用源语言的文件归属。 */
     fun save(
         project: Project,
         repo: LocaleRepository,
         sourceLocale: String,
         edits: Map<String, Map<String, String>>,
-    ): Result {
-        if (edits.isEmpty()) return Result()
-        val succeeded = ArrayList<String>()
-        val failed = LinkedHashMap<String, String>()
-        val prepared = LinkedHashMap<String, Pair<VirtualFile, String>>()
-
-        for ((locale, changes) in edits) {
-            if (changes.isEmpty()) continue
-            val ioFile: File = repo.localeFile(locale) ?: run {
-                failed[locale] = "未找到对应的语言包文件"
-                continue
-            }
-            val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(ioFile)
-            if (virtualFile == null) {
-                failed[locale] = "VFS 找不到文件: ${ioFile.name}"
-                continue
-            }
-            val document = FileDocumentManager.getInstance().getDocument(virtualFile)
-            if (document == null) {
-                failed[locale] = "无法获取 Document"
-                continue
-            }
-            val updated = runCatching { applyChanges(document.text, changes) }
-            if (updated.isFailure) {
-                failed[locale] = updated.exceptionOrNull()?.message ?: "写入失败"
-                continue
-            }
-            prepared[locale] = virtualFile to updated.getOrThrow()
-        }
-
-        if (prepared.isEmpty()) return Result(succeeded, failed)
-
-        ApplicationManager.getApplication().invokeAndWait {
-            WriteCommandAction.runWriteCommandAction(project, "i18n: 保存翻译", null, {
-                for ((locale, pair) in prepared) {
-                    val (virtualFile, newText) = pair
-                    val document = FileDocumentManager.getInstance().getDocument(virtualFile) ?: continue
-                    document.setText(newText)
-                    FileDocumentManager.getInstance().saveDocument(document)
-                    succeeded += locale
+        onlyMissing: Boolean = false,
+    ): Result = onEventThread {
+        val changes = linkedMapOf<Document, String>()
+        val locales = linkedSetOf<String>()
+        val failed = linkedMapOf<String, String>()
+        for ((locale, values) in edits) {
+            if (values.isEmpty()) continue
+            try {
+                val existing = repo.filesFor(locale).associateWith { file ->
+                    JsonLocaleWriter(document(file).text, repo.keyStyle).read()
                 }
-            })
+                // 缺失检查与写入同处事件线程，保留等待翻译期间新增的未保存译文。
+                val pending = if (onlyMissing) values.filterKeys { key -> existing.values.none { key in it } } else values
+                if (pending.isEmpty()) continue
+                val grouped = pending.entries.groupBy { (key, _) ->
+                    val matches = existing.filterValues { key in it }.keys
+                    require(matches.size <= 1) { "key 出现在多个文件中：$key" }
+                    matches.singleOrNull() ?: repo.localeFile(locale, key, sourceLocale)
+                        ?: error("未找到 $locale 对应的语言包文件：$key")
+                }
+                for ((file, entries) in grouped) {
+                    val target = document(file)
+                    changes[target] = applyChanges(target.text, entries.associate { it.key to it.value }, repo.keyStyle)
+                }
+                locales += locale
+            } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
+                throw e
+            } catch (e: Exception) {
+                failed[locale] = e.message ?: "保存失败"
+            }
         }
-        return Result(succeeded, failed)
+        commit(project, "i18n: 保存翻译", changes, locales, failed)
     }
 
+    /** 用实际 key 风格生成新文本，冲突时保留原文并向调用者返回错误。 */
     internal fun applyChanges(
         sourceText: String,
         changes: Map<String, String>,
+        keyStyle: KeyStyle = KeyStyle.NESTED,
     ): String {
-        val writer = JsonLocaleWriter(sourceText)
-        for ((key, value) in changes) {
-            if (!writer.set(key, value)) {
-                throw IllegalStateException("无法写入 key: $key")
-            }
-        }
+        val writer = JsonLocaleWriter(sourceText, keyStyle)
+        for ((key, value) in changes) writer.setValue(key, value)
         return writer.render()
     }
 
-    fun missingFor(
-        repo: LocaleRepository,
-        sourceLocale: String,
-        targetLocales: List<String>,
-    ): Map<String, List<String>> {
+    /** 从真实译文值判断缺失，空字符串也需要补全。 */
+    fun missingFor(repo: LocaleRepository, sourceLocale: String, targetLocales: List<String>): Map<String, List<String>> {
         val source = repo.valuesOf(sourceLocale)
         return targetLocales.associateWith { locale ->
             val values = repo.valuesOf(locale)
-            source.keys.filter { key -> values[key].isNullOrBlank() }
+            source.keys.filter { values[it].isNullOrBlank() }
         }
     }
 
-    /**
-     * 从全部语言包中删除指定 key。
-     *
-     * @param repo 语言库实例
-     * @param keysToDelete 要删除的 key 列表
-     * @return 操作结果（成功/失败信息）
-     */
-    fun deleteKeys(
-        project: Project,
-        repo: LocaleRepository,
-        keysToDelete: List<String>,
-    ): Result {
-        if (keysToDelete.isEmpty()) return Result()
-
-        val succeeded = ArrayList<String>()
-        val failed = LinkedHashMap<String, String>()
-        val prepared = LinkedHashMap<String, Pair<VirtualFile, String>>()
-
-        // 对每个语言包进行删除
-        for ((locale, localeFile) in repo.localeFiles()) {
-            if (localeFile == null) continue
-
-            val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(localeFile)
-            if (virtualFile == null) {
-                failed[locale] = "VFS 找不到文件: ${localeFile.name}"
-                continue
+    /** 遍历全部语言文件删除 key，准备失败时不提交部分结果。 */
+    fun deleteKeys(project: Project, repo: LocaleRepository, keysToDelete: List<String>): Result = onEventThread {
+        val changes = linkedMapOf<Document, String>()
+        val locales = linkedSetOf<String>()
+        val failed = linkedMapOf<String, String>()
+        for (resolved in repo.resolvedFiles()) {
+            try {
+                val target = document(resolved.file)
+                val writer = JsonLocaleWriter(target.text, repo.keyStyle)
+                if (keysToDelete.none { it in writer.read() }) continue
+                keysToDelete.forEach { writer.remove(it) }
+                changes[target] = writer.render()
+                locales += resolved.locale
+            } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
+                throw e
+            } catch (e: Exception) {
+                failed[resolved.file.path] = e.message ?: "删除失败"
             }
-
-            val document = FileDocumentManager.getInstance().getDocument(virtualFile)
-            if (document == null) {
-                failed[locale] = "无法获取 Document"
-                continue
-            }
-
-            val updated = runCatching { deleteKeysFromJson(document.text, keysToDelete) }
-            if (updated.isFailure) {
-                failed[locale] = updated.exceptionOrNull()?.message ?: "删除失败"
-                continue
-            }
-
-            prepared[locale] = virtualFile to updated.getOrThrow()
         }
-
-        if (prepared.isEmpty()) return Result(succeeded, failed)
-
-        ApplicationManager.getApplication().invokeAndWait {
-            WriteCommandAction.runWriteCommandAction(project, "i18n: 删除 key", null, {
-                for ((locale, pair) in prepared) {
-                    val (virtualFile, newText) = pair
-                    val document = FileDocumentManager.getInstance().getDocument(virtualFile) ?: return@runWriteCommandAction
-                    document.setText(newText)
-                    succeeded += locale
-                }
-            })
-        }
-
-        return Result(succeeded, failed)
+        commit(project, "i18n: 删除 key", changes, locales, failed)
     }
 
-    /**
-     * 从 JSON 文本中删除指定 key。
-     * 支持嵌套路径，如 `common.ok` 删除 `{"common": {"ok": "..."}}`。
-     */
-    private fun deleteKeysFromJson(sourceText: String, keysToDelete: List<String>): String {
-        val root = com.google.gson.JsonParser.parseString(sourceText).asJsonObject
-
-        for (key in keysToDelete) {
-            deleteNested(root, key)
-        }
-
-        return LocaleFileWriter.render(root)
-    }
-
-    /**
-     * 从根对象中按点号路径删除 key。
-     * 如果中间层级被清空则一并删除。
-     */
-    private fun deleteNested(root: com.google.gson.JsonObject, dottedKey: String) {
-        val parts = dottedKey.split('.')
-        if (parts.isEmpty()) return
-
-        val keys = mutableListOf<Pair<com.google.gson.JsonObject, String>>()
-        var current = root
-
-        // 定位到倒数第二层
-        for (i in 0 until parts.lastIndex) {
-            val part = parts[i]
-            val existing = current[part]
-            keys += current to part
-
-            current = if (existing != null && existing.isJsonObject) {
-                existing.asJsonObject
-            } else {
-                // 中间路径不存在，无需删除
-                return
-            }
-        }
-
-        // 删除最后一个 key
-        current.remove(parts[parts.lastIndex])
-
-        // 清理空的中间层级（从底向上）
-        for ((obj, key) in keys.asReversed()) {
-            val child = obj[key]
-            if (child != null && child.isJsonObject && child.asJsonObject.size() == 0) {
-                obj.remove(key)
-            } else {
-                break
-            }
-        }
-    }
-
-    /**
-     * 将指定 key 在所有语言包中重命名。
-     *
-     * @param repo 语言库实例
-     * @param oldKey 旧 key
-     * @param newKey 新 key
-     * @return 操作结果
-     */
+    /** 同时重命名所有语言文件和源码引用，目标冲突时整个操作不写入。 */
     fun renameKey(
         project: Project,
         repo: LocaleRepository,
         oldKey: String,
         newKey: String,
+        sourceUpdates: Map<Document, String> = emptyMap(),
+    ): Result = onEventThread {
+        if (oldKey == newKey) return@onEventThread Result()
+        val changes = linkedMapOf<Document, String>()
+        val locales = linkedSetOf<String>()
+        val failed = linkedMapOf<String, String>()
+        for (resolved in repo.resolvedFiles()) {
+            try {
+                val target = document(resolved.file)
+                val writer = JsonLocaleWriter(target.text, repo.keyStyle)
+                val values = writer.read()
+                require(newKey !in values) { "目标 key 已存在：$newKey" }
+                if (oldKey !in values) continue
+                writer.rename(oldKey, newKey)
+                changes[target] = writer.render()
+                locales += resolved.locale
+            } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
+                throw e
+            } catch (e: Exception) {
+                failed[resolved.file.path] = e.message ?: "重命名失败"
+            }
+        }
+        if (changes.isEmpty() && failed.isEmpty()) failed[oldKey] = "未找到原 key"
+        changes.putAll(sourceUpdates)
+        commit(project, "i18n: 重命名 key", changes, locales, failed)
+    }
+
+    /** 使用 IDE 最新的未保存文本，避免磁盘旧值覆盖编辑器改动。 */
+    private fun document(file: File): Document {
+        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
+            ?: error("找不到文件：${file.path}")
+        require(virtualFile.isWritable) { "文件只读：${file.path}" }
+        return FileDocumentManager.getInstance().getDocument(virtualFile)
+            ?: error("无法读取文档：${file.path}")
+    }
+
+    /** 所有文件先校验可写性，再在同一命令写入，失败时恢复已修改文档。 */
+    private fun commit(
+        project: Project,
+        title: String,
+        changes: Map<Document, String>,
+        locales: Set<String>,
+        failures: Map<String, String>,
     ): Result {
-        if (oldKey == newKey) return Result()
-
-        val succeeded = ArrayList<String>()
-        val failed = LinkedHashMap<String, String>()
-        val prepared = LinkedHashMap<String, Pair<VirtualFile, String>>()
-
-        // 对每个语言包进行重命名
-        for ((locale, localeFile) in repo.localeFiles()) {
-            if (localeFile == null) continue
-
-            val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(localeFile)
-            if (virtualFile == null) {
-                failed[locale] = "VFS 找不到文件: ${localeFile.name}"
-                continue
+        if (failures.isNotEmpty()) return Result(failed = failures)
+        if (changes.isEmpty()) return Result()
+        if (changes.keys.any { !it.isWritable }) return Result(failed = mapOf(title to "存在只读文档，未保存任何修改"))
+        val originals = changes.keys.associateWith { it.text }
+        var failure: String? = null
+        WriteCommandAction.runWriteCommandAction(project, title, null, Runnable {
+            try {
+                for ((document, text) in changes) document.setText(text)
+            } catch (e: Exception) {
+                originals.forEach { (document, text) -> document.setText(text) }
+                if (e is com.intellij.openapi.progress.ProcessCanceledException) throw e
+                failure = e.message ?: "写入失败，已恢复原文"
             }
-
-            val document = FileDocumentManager.getInstance().getDocument(virtualFile)
-            if (document == null) {
-                failed[locale] = "无法获取 Document"
-                continue
-            }
-
-            val updated = runCatching { renameKeyInJson(document.text, oldKey, newKey) }
-            if (updated.isFailure) {
-                failed[locale] = updated.exceptionOrNull()?.message ?: "重命名失败"
-                continue
-            }
-
-            prepared[locale] = virtualFile to updated.getOrThrow()
-        }
-
-        if (prepared.isEmpty()) return Result(succeeded, failed)
-
-        ApplicationManager.getApplication().invokeAndWait {
-            WriteCommandAction.runWriteCommandAction(project, "i18n: 重命名 key", null, {
-                for ((locale, pair) in prepared) {
-                    val (virtualFile, newText) = pair
-                    val document = FileDocumentManager.getInstance().getDocument(virtualFile) ?: return@runWriteCommandAction
-                    document.setText(newText)
-                    succeeded += locale
-                }
-            })
-        }
-
-        return Result(succeeded, failed)
+        })
+        failure?.let { return Result(failed = mapOf(title to it)) }
+        changes.keys.forEach { FileDocumentManager.getInstance().saveDocument(it) }
+        return Result(succeeded = locales.toList())
     }
 
-    /**
-     * 在 JSON 文本中重命名 key。
-     * 如果旧 key 存在，读取其值，删除旧 key，写入新 key。
-     */
-    private fun renameKeyInJson(sourceText: String, oldKey: String, newKey: String): String {
-        val root = com.google.gson.JsonParser.parseString(sourceText).asJsonObject
-        val writer = JsonLocaleWriter(sourceText)
-
-        // 读取旧 key 的值
-        val value = getNestedValue(root, oldKey)
-        if (value != null) {
-            // 删除旧 key
-            deleteNested(root, oldKey)
-            // 写入新 key
-            LocaleFileWriter.setNested(root, newKey, value)
-        }
-
-        return LocaleFileWriter.render(root)
-    }
-
-    /**
-     * 从根对象按点号路径读取值。
-     */
-    private fun getNestedValue(root: com.google.gson.JsonObject, dottedKey: String): String? {
-        val parts = dottedKey.split('.')
-        var current: com.google.gson.JsonElement = root
-
-        for (part in parts) {
-            if (!current.isJsonObject) return null
-            current = current.asJsonObject[part] ?: return null
-        }
-
-        return if (current.isJsonPrimitive) current.asString else null
+    /** 文档读取和修改都在事件线程完成，避免后台任务与用户编辑互相覆盖。 */
+    private fun onEventThread(action: () -> Result): Result {
+        val application = ApplicationManager.getApplication()
+        if (application.isDispatchThread) return action()
+        var result = Result()
+        application.invokeAndWait { result = action() }
+        return result
     }
 }

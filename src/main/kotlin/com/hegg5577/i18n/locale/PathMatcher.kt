@@ -12,45 +12,56 @@ class PathMatcher(
     val usesLocale: Boolean get() = pattern.contains(LOCALE_TOKEN)
     val usesNamespace: Boolean get() = pattern.contains(NAMESPACE_TOKEN)
 
+    /** 按显式 token 匹配路径，保留 namespace；{file} 继续只选择一个默认文件。 */
     fun resolve(root: File): List<ResolvedLocale> {
         if (!root.isDirectory || segments.isEmpty()) return emptyList()
-        var level: List<Level> = listOf(Level(null, root))
+        var level = listOf(Level(null, root))
 
-        for (segment in segments) {
+        for ((index, segment) in segments.withIndex()) {
             val next = when {
-                segment.startsWith(LOCALE_TOKEN) && hasExtension(segment) -> {
-                    val ext = segment.substringAfterLast('.', "")
-                    level.flatMap { (_, dir) ->
-                        dataFiles(dir).mapNotNull { file ->
-                            if (ext.isNotEmpty() && !file.extension.equals(ext, ignoreCase = true)) {
+                segment == FILE_TOKEN -> level.mapNotNull { item ->
+                    val exact = File(item.dir, defaultFileName)
+                    val file = if (exact.isFile) exact else dataFiles(item.dir).firstOrNull()
+                    file?.let { item.copy(dir = it) }
+                }
+                segment.contains(LOCALE_TOKEN) || segment.contains(NAMESPACE_TOKEN) -> {
+                    val tokens = Regex("\\{locale}|\\{namespace}").findAll(segment).toList()
+                    val expression = buildString {
+                        var start = 0
+                        for (token in tokens) {
+                            append(Regex.escape(segment.substring(start, token.range.first)))
+                            append(if (token.value == NAMESPACE_TOKEN) "(.+)" else "(.+?)")
+                            start = token.range.last + 1
+                        }
+                        append(Regex.escape(segment.substring(start)))
+                    }
+                    val regex = Regex(expression, RegexOption.IGNORE_CASE)
+                    level.flatMap { item ->
+                        val candidates = if (index < segments.lastIndex || segment == LOCALE_TOKEN) {
+                            childDirs(item.dir)
+                        } else {
+                            dataFiles(item.dir)
+                        }
+                        candidates.mapNotNull { file ->
+                            val match = regex.matchEntire(file.name) ?: return@mapNotNull null
+                            if (file.isFile && !usesNamespace && isAggregateFile(file.name)) {
                                 return@mapNotNull null
                             }
-                            if (isAggregateFile(file.name)) return@mapNotNull null
-                            Level(localeFromFileName(file), file)
+                            var locale = item.locale
+                            var namespace = item.namespace
+                            for ((tokenIndex, token) in tokens.withIndex()) {
+                                val value = match.groupValues[tokenIndex + 1]
+                                if (token.value == LOCALE_TOKEN) locale = value
+                                else namespace = if (file.isFile && segment == NAMESPACE_TOKEN) {
+                                    file.nameWithoutExtension
+                                } else value
+                            }
+                            Level(locale, file, namespace)
                         }
                     }
                 }
-                segment.startsWith(NAMESPACE_TOKEN) && hasExtension(segment) -> {
-                    level.flatMap { (locale, dir) ->
-                        val suffix = segment.removePrefix(NAMESPACE_TOKEN).removePrefix(".")
-                        dataFiles(dir)
-                            .filter { suffix.isEmpty() || it.name.endsWith(suffix, ignoreCase = true) }
-                            .map { Level(locale, it) }
-                    }
-                }
-                segment == LOCALE_TOKEN -> level.flatMap { (_, dir) ->
-                    childDirs(dir).map { Level(it.name, it) }
-                }
-                segment == NAMESPACE_TOKEN -> level.flatMap { (locale, dir) ->
-                    dataFiles(dir).map { Level(locale, it) }
-                }
-                segment == FILE_TOKEN -> level.flatMap { (locale, dir) ->
-                    val exact = File(dir, defaultFileName)
-                    val file = if (exact.isFile) exact else dataFiles(dir).firstOrNull()
-                    if (file == null) emptyList() else listOf(Level(locale, file))
-                }
-                else -> level.mapNotNull { (locale, dir) ->
-                    File(dir, segment).takeIf { it.exists() }?.let { Level(locale, it) }
+                else -> level.mapNotNull { item ->
+                    File(item.dir, segment).takeIf { it.exists() }?.let { item.copy(dir = it) }
                 }
             }
             if (next.isEmpty()) return emptyList()
@@ -59,23 +70,24 @@ class PathMatcher(
 
         return level
             .filter { it.dir.isFile }
-            .map { (locale, file) -> ResolvedLocale(locale ?: localeFromFileName(file), file) }
+            .map { (locale, file, namespace) ->
+                ResolvedLocale(locale ?: localeFromFileName(file), file, namespace)
+            }
             .distinctBy { it.locale to it.file.path }
-            .sortedBy { it.locale }
+            .sortedWith(compareBy({ it.locale }, { it.file.path }))
     }
 
-    private data class Level(val locale: String?, val dir: File)
+    private data class Level(val locale: String?, val dir: File, val namespace: String? = null)
 
-    private fun hasExtension(segment: String): Boolean =
-        segment.substringAfterLast('/').substringAfterLast('.', "").isNotEmpty()
-
+    /** 固定遍历顺序，保证默认文件回退与兼容首文件稳定。 */
     private fun childDirs(dir: File): List<File> =
-        dir.listFiles { f: File -> f.isDirectory }?.toList().orEmpty()
+        dir.listFiles { f: File -> f.isDirectory }?.sortedBy { it.name }.orEmpty()
 
+    /** 仅匹配受支持的数据文件，并固定合并顺序。 */
     private fun dataFiles(dir: File): List<File> =
         dir.listFiles { f: File ->
             f.isFile && f.extension.lowercase() in DATA_EXTENSIONS
-        }?.toList().orEmpty()
+        }?.sortedBy { it.name }.orEmpty()
 
     private fun localeFromFileName(file: File): String {
         val base = file.name.substringBeforeLast('.', file.name)
@@ -97,4 +109,5 @@ class PathMatcher(
     }
 }
 
-data class ResolvedLocale(val locale: String, val file: File)
+/** namespace 仅由显式 {namespace} 提取，默认值兼容旧构造调用。 */
+data class ResolvedLocale(val locale: String, val file: File, val namespace: String? = null)

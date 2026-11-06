@@ -47,10 +47,9 @@ class I18nInlayProviderFactory : InlayHintsProviderFactory {
         const val PROVIDER_NAME = "i18n translations"
 
         /**
-         * 目标语言的 ID。JSX / TSX 在 IntelliJ 里属于 JavaScript / TypeScript 语言，
-         * 因此无需单独列出。
+         * 使用 IDE 实际的语言 ID，现代 JS/JSX 和 TSX 有独立方言，必须显式注册。
          */
-        val LANGUAGE_IDS = setOf("JavaScript", "TypeScript", "HTML", "Vue")
+        val LANGUAGE_IDS = setOf("JavaScript", "ECMAScript 6", "TypeScript", "TypeScript JSX", "HTML", "Vue")
 
         /** 该语言的 id 是否在我们支持的范围里（供诊断复用）。 */
         fun supports(languageId: String): Boolean = languageId in LANGUAGE_IDS

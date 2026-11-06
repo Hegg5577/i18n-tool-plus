@@ -1,4 +1,4 @@
-# i18n Helper 配置文件示例
+# i18n tool plus 配置文件示例
 #
 # 将此文件复制到项目根目录并重命名为 `.i18nrc.yml`，然后根据需要修改配置项。
 # 配置优先级：.i18nrc.yml > IDE Settings > 插件默认值
@@ -72,7 +72,7 @@ namespaceDelimiter: ":"
 inlineAnnotationEnabled: true
 
 # 行内提示的译文语言（留空表示跟随 displayLocales 第一项）
-annotationLocale: zh
+annotationLocale: ""
 
 # 首选语言缺 key 时是否回退显示源语言原文
 fallbackToSource: true

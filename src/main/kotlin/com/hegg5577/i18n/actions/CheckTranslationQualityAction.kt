@@ -1,14 +1,13 @@
 package com.hegg5577.i18n.actions
 
 import com.hegg5577.i18n.translator.TranslationQualityChecker
-import com.hegg5577.i18n.settings.I18nSettings
+import com.hegg5577.i18n.settings.I18nContext
 import com.hegg5577.i18n.locale.LocaleRepository
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.DialogWrapper
-import java.io.File
 import javax.swing.JComponent
 import javax.swing.JTextArea
 import javax.swing.JScrollPane
@@ -21,16 +20,13 @@ import javax.swing.JScrollPane
  */
 class CheckTranslationQualityAction : AnAction("Check Translation Quality") {
 
+    /** 按项目配置读取真实原文和译文，展示质量检查结果。 */
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
 
         try {
-            val projectRoot = File(project.basePath ?: return)
-            val settings = I18nSettings.getInstance(project)
-
-            // 扫描所有翻译
-            val repo = LocaleRepository(projectRoot, settings.localesPath, settings.state.pathMatcher,
-                com.hegg5577.i18n.locale.KeyStyle.NESTED)
+            val context = I18nContext.of(project)
+            val repo = context.repository() ?: return
             val locales = repo.scanLocales()
 
             if (locales.isEmpty()) {
@@ -38,30 +34,7 @@ class CheckTranslationQualityAction : AnAction("Check Translation Quality") {
                 return
             }
 
-            // 收集所有源文本（第一个语言为源语言）
-            val sourceLocale = locales.firstOrNull() ?: return
-            val sources = sourceLocale.keys.associate { it to it }
-
-            // 执行质量检查
-            val allIssues = mutableListOf<TranslationQualityChecker.CheckResult>()
-            for ((idx, locale) in locales.withIndex()) {
-                if (idx == 0) continue // 跳过源语言
-
-                val langName = settings.state.displayLocales.getOrNull(idx - 1) ?: "lang$idx"
-
-                for (key in locale.keys) {
-                    val source = sources[key] ?: continue
-                    val result = TranslationQualityChecker.check(
-                        key = key,
-                        language = langName,
-                        source = source,
-                        translation = key,  // 这里暂时用 key 本身作为 translation
-                    )
-                    if (!result.isValid) {
-                        allIssues.add(result)
-                    }
-                }
-            }
+            val allIssues = collectQualityIssues(repo, context.sourceLocale)
 
             if (allIssues.isEmpty()) {
                 Messages.showInfoMessage(project, "所有翻译质量检查通过！", "质量检查")
@@ -77,6 +50,27 @@ class CheckTranslationQualityAction : AnAction("Check Translation Quality") {
         } catch (e: Exception) {
             Messages.showErrorDialog(project, e.message ?: "未知错误", "错误")
         }
+    }
+
+    /** 使用实际语言代码和文本进行检查，源语言缺失时阻止产生误导性报告。 */
+    internal fun collectQualityIssues(
+        repo: LocaleRepository,
+        sourceLocale: String,
+    ): List<TranslationQualityChecker.CheckResult> {
+        val locales = repo.scanLocales()
+        require(locales.any { it.locale == sourceLocale }) { "未找到配置的源语言：$sourceLocale" }
+        val sources = repo.valuesOf(sourceLocale)
+        val allIssues = mutableListOf<TranslationQualityChecker.CheckResult>()
+        for (item in locales) {
+            val locale = item.locale
+            if (locale == sourceLocale) continue
+            for ((key, translation) in repo.valuesOf(locale)) {
+                val source = sources[key] ?: continue
+                val result = TranslationQualityChecker.check(key, locale, source, translation)
+                if (!result.isValid) allIssues.add(result)
+            }
+        }
+        return allIssues
     }
 
     private fun buildQualityReport(issues: List<TranslationQualityChecker.CheckResult>): String {

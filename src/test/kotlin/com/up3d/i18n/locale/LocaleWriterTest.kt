@@ -2,6 +2,7 @@
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -69,9 +70,11 @@ class LocaleWriterTest {
     }
 
     @Test
+    /** 仅在提供外部数据时验证真实语言包，公开仓库不绑定本机目录。 */
     fun `真实项目 JSON 语言包修改单个 key`() {
-        val source = File("E:/CompanyItem/ai-station-web/src/i18n/locales/zh/index.json")
-        assertTrue("真实项目文件不存在: " + source.path, source.isFile)
+        val projectRoot = File(System.getenv("I18N_TEST_PROJECT") ?: "test-project")
+        val source = File(projectRoot, "src/i18n/locales/zh/index.json")
+        assumeTrue("真实项目文件不存在，跳过: " + source.path, source.isFile)
         val original = source.readText()
         val before = JsonLocaleWriter(original).read()
 

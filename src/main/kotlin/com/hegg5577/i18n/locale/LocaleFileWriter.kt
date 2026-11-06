@@ -37,11 +37,17 @@ object LocaleFileWriter {
 
         for (i in 0 until parts.lastIndex) {
             val existing = current[parts[i]]
+            require(existing == null || existing.isJsonObject) {
+                "key 路径冲突：${parts.take(i + 1).joinToString(".")} 已有非对象值"
+            }
             current = if (existing != null && existing.isJsonObject) {
                 existing.asJsonObject
             } else {
                 JsonObject().also { current.add(parts[i], it) }
             }
+        }
+        require(current[parts.last()]?.isJsonObject != true && current[parts.last()]?.isJsonArray != true) {
+            "key 路径冲突：$dottedKey 已有子节点"
         }
         current.addProperty(parts[parts.lastIndex], value)
     }

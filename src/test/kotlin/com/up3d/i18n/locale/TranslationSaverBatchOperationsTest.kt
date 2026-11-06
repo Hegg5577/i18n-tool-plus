@@ -1,180 +1,101 @@
 package com.hegg5577.i18n.locale
 
 import com.google.gson.JsonParser
-import org.junit.Test
 import org.junit.Assert.*
+import org.junit.Test
 
 class TranslationSaverBatchOperationsTest {
-
+    /** 调用真实删除逻辑，确保删除后仍保留相邻译文。 */
     @Test
     fun testDeleteKeyFromNestedJson() {
-        val json = """
-{
-  "common": {
-    "ok": "OK",
-    "cancel": "Cancel"
-  },
-  "form": {
-    "submit": "Submit"
-  }
-}
-        """.trimIndent()
-
-        val root = JsonParser.parseString(json).asJsonObject
-        val writer = JsonLocaleWriter(json)
-
-        // 删除 common.cancel
-        deleteNested(root, "common.cancel")
-
-        val result = writer.render()
-        assertTrue(result.contains("\"ok\""))
-        assertFalse(result.contains("\"cancel\""))
-        assertTrue(result.contains("\"submit\""))
+        val writer = JsonLocaleWriter("""{"common":{"ok":"OK","cancel":"Cancel"},"keep":"value"}""")
+        writer.remove("common.cancel")
+        assertEquals(mapOf("common.ok" to "OK", "keep" to "value"), writer.read())
     }
 
+    /** 删除最后一个叶节点时清理空父节点。 */
     @Test
     fun testDeleteLastKeyRemovesParent() {
-        val json = """
-{
-  "temp": {
-    "value": "will be deleted"
-  },
-  "keep": "this"
-}
-        """.trimIndent()
-
-        val root = JsonParser.parseString(json).asJsonObject
-
-        deleteNested(root, "temp.value")
-
-        // 如果 temp 下没有其他 key，temp 也会被删除
-        val result = JsonLocaleWriter(json).render()
-        assertFalse(result.contains("\"temp\""))
-        assertTrue(result.contains("\"keep\""))
+        val writer = JsonLocaleWriter("""{"a":{"b":{"c":"value"}},"keep":"yes"}""")
+        writer.remove("a.b.c")
+        assertFalse(JsonParser.parseString(writer.render()).asJsonObject.has("a"))
+        assertEquals(mapOf("keep" to "yes"), writer.read())
     }
 
-    @Test
-    fun testRenameKeyMovesValue() {
-        val json = """
-{
-  "old_key": "Old Value",
-  "other": "Other"
-}
-        """.trimIndent()
-
-        val root = JsonParser.parseString(json).asJsonObject
-        val writer = JsonLocaleWriter(json)
-
-        // 获取旧值
-        val value = getNestedValue(root, "old_key")
-        assertEquals("Old Value", value)
-
-        // 删除旧 key，写入新 key
-        deleteNested(root, "old_key")
-        LocaleFileWriter.setNested(root, "new_key", value ?: "")
-
-        val result = JsonLocaleWriter(json).render()
-        assertFalse(result.contains("\"old_key\""))
-        assertTrue(result.contains("\"new_key\""))
-        assertTrue(result.contains("\"Old Value\""))
-    }
-
-    @Test
-    fun testDeleteNestedPath() {
-        val json = """
-{
-  "a": {
-    "b": {
-      "c": {
-        "d": "value"
-      }
-    }
-  }
-}
-        """.trimIndent()
-
-        val root = JsonParser.parseString(json).asJsonObject
-        deleteNested(root, "a.b.c.d")
-
-        val result = JsonLocaleWriter(json).render()
-        assertFalse(result.contains("\"d\""))
-        assertFalse(result.contains("\"value\""))
-    }
-
+    /** 不存在的路径不影响已有文本值。 */
     @Test
     fun testDeleteNonExistentKeyDoesNothing() {
-        val json = """
-{
-  "exists": "yes"
-}
-        """.trimIndent()
-
-        val root = JsonParser.parseString(json).asJsonObject
-        deleteNested(root, "does.not.exist")
-
-        val result = JsonLocaleWriter(json).render()
-        assertTrue(result.contains("\"exists\""))
+        val writer = JsonLocaleWriter("""{"exists":"yes"}""")
+        writer.remove("does.not.exist")
+        assertEquals(mapOf("exists" to "yes"), writer.read())
     }
 
+    /** 重命名必须移动原值并移除旧 key。 */
     @Test
-    fun testGetNestedValue() {
-        val json = """
-{
-  "level1": {
-    "level2": {
-      "key": "value"
-    }
-  }
-}
-        """.trimIndent()
-
-        val root = JsonParser.parseString(json).asJsonObject
-        assertEquals("value", getNestedValue(root, "level1.level2.key"))
-        assertNull(getNestedValue(root, "level1.level2.nonexist"))
-        assertNull(getNestedValue(root, "nonexist"))
+    fun testRenameKeyMovesValue() {
+        val writer = JsonLocaleWriter("""{"old":{"key":"value"},"keep":"yes"}""")
+        writer.rename("old.key", "new.key")
+        assertEquals(mapOf("new.key" to "value", "keep" to "yes"), writer.read())
+        assertFalse(JsonParser.parseString(writer.render()).asJsonObject.has("old"))
     }
 
-    // 辅助方法（从 TranslationSaver 复制用于测试）
-    private fun deleteNested(root: com.google.gson.JsonObject, dottedKey: String) {
-        val parts = dottedKey.split('.')
-        if (parts.isEmpty()) return
-
-        val keys = mutableListOf<Pair<com.google.gson.JsonObject, String>>()
-        var current = root
-
-        for (i in 0 until parts.lastIndex) {
-            val part = parts[i]
-            val existing = current[part]
-            keys += current to part
-
-            current = if (existing != null && existing.isJsonObject) {
-                existing.asJsonObject
-            } else {
-                return
-            }
-        }
-
-        current.remove(parts[parts.lastIndex])
-
-        for ((obj, key) in keys.asReversed()) {
-            val child = obj[key]
-            if (child != null && child.isJsonObject && child.asJsonObject.size() == 0) {
-                obj.remove(key)
-            } else {
-                break
-            }
-        }
+    /** 冲突时原值和目标值都必须保留。 */
+    @Test
+    fun testRenameConflictDoesNotChangeValues() {
+        val writer = JsonLocaleWriter("""{"old":"source","new":"target"}""")
+        assertTrue(runCatching { writer.rename("old", "new") }.isFailure)
+        assertEquals(mapOf("old" to "source", "new" to "target"), writer.read())
     }
 
-    private fun getNestedValue(root: com.google.gson.JsonObject, dottedKey: String): String? {
-        val parts = dottedKey.split('.')
-        var current: com.google.gson.JsonElement = root
+    /** 平铺 key 的删除不能误删同名前缀。 */
+    @Test
+    fun testDeleteFlatKey() {
+        val writer = JsonLocaleWriter("""{"common.ok":"OK","common.cancel":"Cancel"}""", KeyStyle.FLAT)
+        writer.remove("common.ok")
+        assertEquals(mapOf("common.cancel" to "Cancel"), writer.read())
+    }
 
-        for (part in parts) {
-            if (!current.isJsonObject) return null
-            current = current.asJsonObject[part] ?: return null
-        }
+    /** 平铺格式保存后仍使用完整字段名。 */
+    @Test
+    fun testSaveFlatKeyInPlace() {
+        val updated = TranslationSaver.applyChanges("""{"common.ok":"OK"}""", mapOf("common.ok" to "确定"), KeyStyle.FLAT)
+        val root = JsonParser.parseString(updated).asJsonObject
+        assertEquals("确定", root["common.ok"].asString)
+        assertFalse(root.has("common"))
+    }
 
-        return if (current.isJsonPrimitive) current.asString else null
+    /** 混合格式中更新嵌套 key 时不能额外产生同名平铺字段。 */
+    @Test
+    fun testAutoKeepsExistingNestedKey() {
+        val updated = TranslationSaver.applyChanges(
+            """{"flat.key":"flat","common":{"ok":"OK"}}""",
+            mapOf("common.ok" to "确定"), KeyStyle.AUTO,
+        )
+        val root = JsonParser.parseString(updated).asJsonObject
+        assertEquals("确定", root["common"].asJsonObject["ok"].asString)
+        assertFalse(root.has("common.ok"))
+    }
+
+    /** 自动模式新 key 沿用已有平铺字段的风格。 */
+    @Test
+    fun testAutoAddsFlatKey() {
+        val updated = TranslationSaver.applyChanges("""{"common.ok":"OK"}""", mapOf("common.cancel" to "取消"), KeyStyle.AUTO)
+        assertEquals("取消", JsonParser.parseString(updated).asJsonObject["common.cancel"].asString)
+    }
+
+    /** 中间节点已有原文时拒绝覆盖。 */
+    @Test
+    fun testSaveRejectsScalarParentConflict() {
+        val writer = JsonLocaleWriter("""{"common":"通用"}""")
+        assertTrue(runCatching { writer.setValue("common.ok", "确定") }.isFailure)
+        assertEquals(mapOf("common" to "通用"), writer.read())
+    }
+
+    /** 父节点重名也不能吞掉现有子节点。 */
+    @Test
+    fun testSaveRejectsObjectReplacement() {
+        val writer = JsonLocaleWriter("""{"common":{"ok":"确定"}}""")
+        assertTrue(runCatching { writer.setValue("common", "通用") }.isFailure)
+        assertEquals(mapOf("common.ok" to "确定"), writer.read())
     }
 }

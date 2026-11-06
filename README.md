@@ -1,212 +1,78 @@
-# i18n Helper - JetBrains 插件
+# i18n tool plus
 
-完全对标 VSCode [i18n-ally-next](https://github.com/hemeng召/i18n-ally-next) 的 JetBrains IDE 版本。  
-为 WebStorm / IDEA / Rider 等 JetBrains IDE 提供强大的国际化管理能力。
+面向 JetBrains IDE 的前端国际化辅助插件，提供语言包管理、代码中的翻译预览和翻译编辑功能。
 
-> **开发者**: hegg5577  
-> **状态**: 生产级（功能完成度 90%）  
-> **平台**: WebStorm / IDEA 2026.x+
+当前版本：`0.1.2`，处于开发阶段。构建平台为 WebStorm 2026.3，插件声明兼容平台构建号 `261` 至 `263.*`；其他 IDE 的实际兼容性尚未验证。
 
----
+## 功能
 
-## ✨ 核心特性
+- 多语言对照表，查看和筛选翻译内容。
+- 在 `t('key')` 等调用中显示行内译文及 Hover 翻译预览。
+- 编辑单个 Key 的多语言翻译，支持批量删除和前缀替换重命名。
+- 检查缺失、未使用的 Key 及翻译质量。
+- 配置 Google、DeepL 或 OpenAI 翻译引擎。
+- 使用 IDE 设置或项目级 `.i18nrc.yml` 配置语言包与源码扫描范围。
 
-### 📋 多语言对照表
-- 侧边栏实时展示所有语言的翻译状态
-- 按语言分列，清晰区分：已翻译 / 空值 / 缺失 / 过期
-- 搜索 + 过滤 + 排序
+## 使用
 
-### 🔍 智能检测
-- 代码中缺失的 key（代码用但语言包没定）
-- 语言包中过期的 key（语言包有但代码不用）
-- 语言间不一致的 key
+1. 在 IDE 设置中打开 **Tools → i18n tool plus**，配置语言包目录、路径匹配模式、源语言和展示语言。
+2. 从 **Tools** 菜单打开翻译面板，查看语言包并双击 Key 编辑译文。
+3. 如需团队共享配置，将根目录的 `.i18nrc.example.yml` 复制到使用插件的前端项目中，重命名为 `.i18nrc.yml`，按实际目录修改。
+4. 自动翻译需要网络连接；DeepL 和 OpenAI 需要配置对应服务的 API 密钥。
 
-### ✏️ 便捷编辑
-- **双击编辑** — 表格行打开详情编辑
-- **一键提取** — Alt+Enter 将硬编码字符串提取为 i18n key
-- **批量操作** — 多选 key 后批量删除/重命名
-- **快捷重命名** — Shift+F6 重命名，自动更新所有语言包
+配置说明见 [YAML 配置指南](docs/YAML_CONFIG.md) 和 [配置示例](.i18nrc.example.yml)。请勿在提交到 Git 的配置中写入真实 API 密钥。
 
-### 🌐 多翻译引擎
-- **Google Translate** — 免费、无需密钥（推荐）
-- **DeepL API** — 专业翻译质量（需 API 密钥）
-- **OpenAI ChatGPT** — 支持代理和自建 API
+详细操作与常见问题见 [使用与排障指南](docs/USAGE.md)。
 
-### 🎯 IDE 深度集成
-- **Hover 预览** — 鼠标悬停 `t('key')` 显示全部语言翻译
-- **代码导航** — 点击 key 跳转到定义
-- **行内提示** — 代码中直接显示翻译文本
-- **快捷菜单** — 右键集成批量操作
+## 开发与打包
 
-### ⚙️ 灵活配置
-- **全局 Settings** — IDE 级配置（Tools → Options/Preferences）
-- **项目级 YAML** — `.i18nrc.yml` 配置（可提交 git，团队共享）
-- **配置优先级** — 项目 YAML > IDE Settings > 默认值
+安装可运行 Gradle 的 JDK，并设置 `JAVA_HOME`。项目使用 Gradle Wrapper，Kotlin 编译工具链配置为 Java 21。
 
----
+Windows PowerShell：
 
-## 🚀 快速开始
-
-### 1. 打开侧边栏面板
-
-**Tools → i18n: 打开翻译面板**
-
-或按 Alt+12 打开右侧 i18n Helper 工具窗口
-
-### 2. 配置语言包路径
-
-首次使用时，Tools → Options/Preferences → Tools → i18n Helper
-
-设置：
-- **Language Pack Directory** — 语言包根目录（如 `src/i18n/locales`）
-- **Path Matcher** — 文件匹配模式（如 `{locale}/{file}`）
-- **Source Language** — 源语言（通常为 `en`）
-
-### 3. 编辑翻译
-
-在表格中：
-- **搜索** — 搜索框快速定位 key
-- **过滤** — 按状态过滤（全部/待填写/缺失）
-- **双击** — 打开 Key 编辑窗口
-
-### 4. 批量操作
-
-Ctrl/Cmd + 点击选中多个 key，然后：
-- **Tools → i18n: 批量删除 Key** — 删除选中 key
-- **Tools → i18n: 批量重命名 Key** — 前缀/后缀/正则替换
-
-### 5. 配置翻译引擎（可选）
-
-Tools → Options/Preferences → Tools → i18n Helper → 翻译引擎
-
-选择引擎：
-- Google（默认，无需密钥）
-- DeepL（输入 API 密钥）
-- OpenAI（输入 API 密钥）
-
----
-
-## 📖 详细文档
-
-| 文档 | 内容 |
-|------|------|
-| [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) | 完整项目进度和功能清单 |
-| [docs/YAML_CONFIG.md](docs/YAML_CONFIG.md) | YAML 配置文件完整指南 |
-| [.i18nrc.example.yml](.i18nrc.example.yml) | 配置示例（带详细注释） |
-| [BATCH_OPERATIONS_IMPLEMENTATION.md](BATCH_OPERATIONS_IMPLEMENTATION.md) | 批量操作实现细节 |
-
----
-
-## 🎯 使用场景
-
-### 场景 1：初始化新项目
-
-```bash
-# 1. 创建示例配置
-cp .i18nrc.example.yml .i18nrc.yml
-
-# 2. 编辑配置
-# - 修改 localesPath 为你的语言包目录
-# - 修改 displayLocales 为项目使用的语言
-
-# 3. 提交到 git
-git add .i18nrc.yml
+```powershell
+.\gradlew.bat runIde
+.\gradlew.bat buildPlugin
 ```
 
-### 场景 2：团队协作翻译
+macOS / Linux：
 
-1. 团队提交了 `.i18nrc.yml` 到 git
-2. 所有成员打开项目后自动读取团队配置
-3. 在侧边栏表格中填充缺失翻译
-4. 支持多人同时编辑不同语言
-
-### 场景 3：代码中提取硬编码字符串
-
-```javascript
-// 光标在字符串上，Alt+Enter
-const msg = "Hello World";
-// ↓ 弹出提取对话框
-// 输入 key: common.greeting
-// 自动翻译后保存
-// ↓ 代码自动变为：
-const msg = t('common.greeting');
+```sh
+sh ./gradlew runIde
+sh ./gradlew buildPlugin
 ```
 
-### 场景 4：批量重命名 key
+默认下载 WebStorm 2026.3 作为开发平台，首次运行需要下载依赖。如需复用本机安装的 IDE，可传入目录：
 
-```bash
-# 选中多个 common_* 的 key，打开批量重命名
-# 选择"前缀替换"
-# 旧前缀：common_
-# 新前缀：common.
-# ↓ 自动重命名所有语言包中的相关 key
+```powershell
+.\gradlew.bat buildPlugin "-PlocalPlatformPath=D:/webstrom/WebStorm 2026.3"
 ```
 
----
+`dev.cmd` 和 `dev.ps1` 是原开发环境的快捷脚本，使用前需按本机情况调整 JDK 路径。其他环境可直接使用 Gradle Wrapper。
 
-## 🔧 技术栈
+打包产物位于 `build/distributions/`。在 IDE 中选择 **Settings → Plugins → 齿轮菜单 → Install Plugin from Disk**，选择生成的 ZIP 安装。
 
-- **Kotlin 2.4** — 主开发语言
-- **IntelliJ Platform 2026.x** — IDE 框架
-- **GSON** — JSON 处理
-- **SnakeYAML** — YAML 配置解析
+## GitHub 发布
 
----
+GitHub 仓库用于发布源码；可安装插件需要另外构建 ZIP 并上传至 GitHub Release。
 
-## 📋 功能清单
+1. 将整理后的源码推送到目标 GitHub 仓库。
+2. 完成构建及 IDE 验证后，为对应提交创建版本标签，例如 `v0.1.0`。
+3. 创建 GitHub Release，填写变更说明，并上传 `build/distributions/` 中生成的插件 ZIP。
 
-| 功能 | 状态 | 说明 |
-|------|------|------|
-| 多语言对照表 | ✅ | 侧边栏表格 + 搜索 + 过滤 |
-| 缺失/过期检测 | ✅ | 自动扫描代码和语言包 |
-| Key 编辑 | ✅ | 支持多语言同步编辑 |
-| 多翻译引擎 | ✅ | Google / DeepL / OpenAI |
-| Settings 面板 | ✅ | 配置所有选项 |
-| 硬编码提取 | ✅ | Alt+Enter 快速提取 |
-| Hover 预览 | ✅ | 悬停显示全部翻译 |
-| Key 重命名 | ✅ | Shift+F6 + 全量更新 |
-| 批量删除 | ✅ | 多选后一键删除 |
-| 批量重命名 | ✅ | 前缀/后缀/正则替换 |
-| YAML 配置 | ✅ | 项目级 .i18nrc.yml |
-| **总体** | **90%** | 缺 PsiReference 完整集成 |
+GitHub Release 与 JetBrains Marketplace 是独立的发布渠道；上传 GitHub 不会自动上架 Marketplace。
 
----
+## 当前限制
 
-## 🐛 已知限制
+- 当前工作区中的修复尚未完成构建及 IDE 实测验证。
+- 原生 Key 导航及平台 Shift+F6 重构尚未完整实现。
+- 插件提供的重命名操作仅处理已配置的源码目录和后缀；引用解析不完整、文件过大或引用定位存在歧义时会拒绝操作。
+- 多文件语言包需正确配置命名空间匹配模式，例如 `{locale}/{namespace}.json`；目标文件归属不明确时不会自动猜测创建。
 
-1. **代码引用不自动更新** — 删除/重命名 key 时，代码中的引用需手动更新
-   - 后续版本会通过 PsiReference 完整重构解决
-   
-2. **全量扫描** — 每次刷新都扫描全部文件
-   - 大型项目可能需要几秒
-   - 后续版本支持增量扫描
+## 许可证
 
-3. **正则表达式学习成本** — 批量重命名时的正则替换需要用户学习
-   - 提供了前缀/后缀替换作为简化方案
+本项目使用 Apache-2.0 许可证，完整条款见 [LICENSE](LICENSE)。
 
----
+## 可选的真实项目测试
 
-## 📞 反馈与贡献
-
-- 发现 Bug 或建议功能？请提交 Issue
-- 欢迎提交 PR 改进代码
-- 问题排查：检查 IDE 日志（Help → Show Log in Finder/Explorer）
-
----
-
-## 📜 许可证
-
-MIT License
-
----
-
-## 🙏 鸣谢
-
-- 原版灵感：[i18n-ally-next](https://github.com/hemeng召/i18n-ally-next) (VS Code)
-- 参考项目：[up3d-education-web](https://github.com/up3d/education-web) (i18next + React)
-
----
-
-**开发者**: hegg5577  
-**最后更新**: 2026-10-19  
-**版本**: 0.1.0
+部分集成测试依赖特定的外部前端项目数据，默认跳过。开发者可通过环境变量 `I18N_TEST_PROJECT` 指定测试项目根目录；这些用例对语言包布局、Key 数量及样例译文有明确断言，普通项目不一定满足。

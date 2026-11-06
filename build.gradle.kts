@@ -7,7 +7,11 @@ plugins {
 }
 
 group = "com.hegg5577.i18n"
-version = "0.1.0"
+version = "0.1.3"
+
+tasks.named<Zip>("buildPlugin") {
+    archiveBaseName.set("i18n-tool-plus")
+}
 
 repositories {
     mavenCentral()
@@ -18,9 +22,13 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        // 复用本机已安装的 WebStorm，免去 ~1.5GB 平台包下载。
-        // 若要改为下载独立平台包，替换为：create("WS", "2026.1.4")
-        local("D:/webstrom/WebStorm 2026.1.4")
+        // 默认下载平台，其他开发者无需安装到相同目录；本地开发可指定已有 IDE。
+        val localPlatformPath = providers.gradleProperty("localPlatformPath").orNull
+        if (localPlatformPath.isNullOrBlank()) {
+            create("WS", "2026.3")
+        } else {
+            local(localPlatformPath)
+        }
         testFramework(TestFrameworkType.Platform)
     }
     // 平台自带 gson（lib/intellij.libraries.gson.jar），编译期引用即可，
@@ -47,7 +55,7 @@ intellijPlatform {
     pluginConfiguration {
         ideaVersion {
             sinceBuild = "261"
-            untilBuild = "262.*"
+            untilBuild = "263.*"
         }
     }
     // 跳过"启动 IDE 索引配置项"这一步，显著加快本地迭代

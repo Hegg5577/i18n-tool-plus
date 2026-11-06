@@ -12,6 +12,7 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.hegg5577.i18n.locale.TranslationSaver
 import com.hegg5577.i18n.translator.PlaceholderProtector
+import com.hegg5577.i18n.translator.TranslationEngine
 import com.hegg5577.i18n.translator.TranslationEngineManager
 import com.hegg5577.i18n.translator.TranslationException
 import java.awt.BorderLayout
@@ -216,31 +217,31 @@ class KeyEditorDialog(
         )
     }
 
+    /** 按各自目标语言翻译后填入编辑框，避免把第一种语言的结果复用给其它语言。 */
     private fun doAutoTranslate(sourceText: String, targetLocales: List<String>) {
         val manager = TranslationEngineManager.getInstance(project)
         val engine = manager.getActiveEngine()
 
-        try {
-            // 保护占位符和 HTML 标签
+        for ((locale, translated) in translateTargets(engine, sourceText, sourceLocale, targetLocales)) {
+            fields[locale]?.text = translated
+        }
+    }
+
+    companion object {
+        /** 每次请求只传一种目标语言，并按现有保护规则还原占位符。 */
+        internal fun translateTargets(
+            engine: TranslationEngine,
+            sourceText: String,
+            sourceLocale: String,
+            targetLocales: List<String>,
+        ): Map<String, String> {
             val protected = PlaceholderProtector.protect(sourceText)
-            val textToTranslate = protected.text
-
-            // 批量翻译
-            val translatedTexts = engine.translate(
-                texts = targetLocales.map { textToTranslate },
-                targetLocale = targetLocales.first(),
-                sourceLocale = sourceLocale,
-            )
-
-            // 逐条还原占位符并更新 UI
-            for ((index, locale) in targetLocales.withIndex()) {
-                val translated = translatedTexts.getOrNull(index)?.let { protected.restore(it) }
-                if (translated != null) {
-                    fields[locale]?.text = translated
-                }
+            return targetLocales.associateWith { locale ->
+                val raw = engine.translate(listOf(protected.text), locale, sourceLocale).singleOrNull()
+                    ?: throw TranslationException("翻译引擎未返回 $locale 的单条译文")
+                protected.restore(raw)
+                    ?: throw TranslationException("$locale 译文的占位符丢失，已丢弃该条")
             }
-        } catch (e: TranslationException) {
-            throw e
         }
     }
 

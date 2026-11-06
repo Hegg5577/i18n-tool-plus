@@ -1,6 +1,8 @@
 package com.hegg5577.i18n.ui
 
 import com.intellij.openapi.components.Service
+import com.intellij.codeInsight.hints.declarative.impl.DeclarativeInlayHintsPassFactory
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
@@ -54,9 +56,14 @@ class I18nPanelService(private val project: Project) {
 
     /** 重新扫描语言包并通知订阅者。 */
     fun refresh() {
+        com.hegg5577.i18n.locale.TranslationIndex.invalidate()
         val snapshot = load()
         cached = snapshot
         listeners.toList().forEach { it(snapshot) }
+        // 语言包和设置的变化不会修改源码，需主动让行内提示重新计算。
+        EditorFactory.getInstance().allEditors.filter { it.project == project }.forEach {
+            DeclarativeInlayHintsPassFactory.scheduleRecompute(it, project)
+        }
     }
 
     /** 取当前快照，未加载过则现场构建。 */
@@ -75,6 +82,7 @@ class I18nPanelService(private val project: Project) {
         return locales.maxByOrNull { it.keys.size }?.locale ?: locales.firstOrNull()?.locale
     }
 
+    /** 聚合每种语言的全部文件，并去重展示语言列表。 */
     private fun load(): Snapshot {
         val context = I18nContext.of(project)
         if (!context.isValid) {
@@ -106,7 +114,7 @@ class I18nPanelService(private val project: Project) {
         val rest = all.map { it.locale }
             .filter { it != sourceLocale && !preferred.contains(it) }
             .sorted()
-        val displayLocales = preferred + rest
+        val displayLocales = (preferred + rest).distinct()
 
         // 取所有语言的 key 并集作为行集合：任何语言里出现过的 key 都要列出来，
         // 否则「某语言多出一个 key」这类问题在表里根本看不见
@@ -187,6 +195,12 @@ class I18nToolWindowFactory : ToolWindowFactory {
         const val TOOL_WINDOW_ID = "i18n-helper"
     }
 
+    /** 保留窗口标识以兼容已有布局，在注册时统一侧边栏和面板标题。 */
+    override fun init(toolWindow: ToolWindow) {
+        toolWindow.title = "i18n tool plus"
+        toolWindow.stripeTitle = "i18n tool plus"
+    }
+
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val service = project.getService(I18nPanelService::class.java)
 
@@ -258,14 +272,23 @@ class I18nToolWindowFactory : ToolWindowFactory {
  * 从面板服务读当前数据而不是重新扫盘：用户刚刷新过，数据是最新的，
  * 也避免每次双击都重新遍历项目。
  */
-private fun openKeyEditor(project: Project, key: String, service: I18nPanelService) {
+internal fun openKeyEditor(project: Project, key: String, service: I18nPanelService) {
     val context = I18nContext.of(project)
     val repo = context.repository() ?: return
     val snapshot = service.snapshot()
 
-    val locales = snapshot.displayLocales
+    val locales = (listOf(snapshot.sourceLocale) + snapshot.displayLocales).distinct()
     // 缺失的 key 用 null 表示「语言包里根本没有」，弹窗据此提示"保存后创建"
     val values: Map<String, String?> = locales.associateWith { repo.valuesOf(it)[key] }
+
+    val localeFiles = try {
+        locales.mapNotNull { locale ->
+            repo.localeFile(locale, key, snapshot.sourceLocale)?.let { locale to it }
+        }.toMap()
+    } catch (e: IllegalStateException) {
+        com.intellij.openapi.ui.Messages.showErrorDialog(project, e.message.orEmpty(), "无法定位语言包文件")
+        return
+    }
 
     KeyEditorDialog(
         project = project,
@@ -273,7 +296,7 @@ private fun openKeyEditor(project: Project, key: String, service: I18nPanelServi
         sourceLocale = snapshot.sourceLocale,
         values = values,
         locales = locales,
-        localeFiles = locales.mapNotNull { l -> repo.localeFile(l)?.let { l to it } }.toMap(),
+        localeFiles = localeFiles,
         onSaved = {
             // 保存后立即刷新，让用户看到状态变化
             service.refresh()

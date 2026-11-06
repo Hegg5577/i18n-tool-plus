@@ -1,17 +1,17 @@
 package com.hegg5577.i18n.editor
 
 import com.intellij.lang.documentation.DocumentationProvider
+import com.intellij.lang.documentation.ExternalDocumentationHandler
 import com.intellij.psi.PsiElement
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.fileEditor.FileEditorManager
-import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.ui.Messages
 import com.hegg5577.i18n.locale.TranslationIndex
-import com.hegg5577.i18n.settings.I18nSettings
+import com.hegg5577.i18n.settings.I18nContext
 import com.hegg5577.i18n.ui.Flags
-import com.hegg5577.i18n.ui.KeyEditorDialog
-import com.hegg5577.i18n.locale.LocaleRepository
-import com.hegg5577.i18n.locale.KeyStyle
-import java.io.File
+import com.hegg5577.i18n.ui.I18nPanelService
+import com.hegg5577.i18n.ui.openKeyEditor
 
 /**
  * Hover 多语言预览。
@@ -19,91 +19,54 @@ import java.io.File
  * 当按 Ctrl+Q 查看文档时，显示所有语言的翻译。
  * 采用 HTML 格式，用点击链接打开编辑对话框。
  */
-class I18nHoverDocumentationProvider : DocumentationProvider {
+class I18nHoverDocumentationProvider : DocumentationProvider, ExternalDocumentationHandler {
 
-    companion object {
-        var lastEditKey: String? = null
-        var lastEditProject: com.intellij.openapi.project.Project? = null
-    }
-
+    /** 原始元素缺失时仍允许从文档目标读取 key。 */
     override fun getQuickNavigateInfo(element: PsiElement?, originalElement: PsiElement?): String? {
-        if (originalElement == null) return null
-        return findTranslationHtml(originalElement)
+        return findTranslationHtml(originalElement ?: element ?: return null)
     }
 
+    /** 悬停与快捷文档使用同一份项目配置。 */
     override fun generateDoc(element: PsiElement?, originalElement: PsiElement?): String? {
-        if (originalElement == null) return null
-        return findTranslationHtml(originalElement)
+        return findTranslationHtml(originalElement ?: element ?: return null)
     }
 
-    override fun getDocumentationElementForLink(
+    /** 只在点击时打开编辑器，并消费链接，避免多个 Provider 重复排队打开弹窗。 */
+    override fun handleExternalLink(
         psiManager: com.intellij.psi.PsiManager?,
         link: String?,
         context: PsiElement?,
-    ): PsiElement? {
-        // 处理 i18n.edit?key=xxx 链接
-        if (link == null || context == null || !link.startsWith("i18n.edit?key=")) {
-            return null
+    ): Boolean {
+        if (link == null || !link.startsWith("i18n.edit?key=")) {
+            return false
         }
+        val project = context?.project ?: psiManager?.project ?: return true
+        val key = try {
+            link.substringAfter("key=").urlDecode()
+        } catch (_: IllegalArgumentException) {
+            return true
+        }
+        if (key.isBlank() || project.isDisposed) return true
 
-        try {
-            val key = link.substringAfter("key=").urlDecode()
-            val project = context.project
-            val settings = I18nSettings.getInstance(project)
-            val projectRoot = File(project.basePath ?: return null)
-
-            // 保存信息以便在后续操作中使用
-            lastEditKey = key
-            lastEditProject = project
-
-            ApplicationManager.getApplication().invokeLater {
-                try {
-                    // 使用 LocaleRepository 获取完整的数据
-                    val repo = LocaleRepository(
-                        projectRoot,
-                        settings.localesPath,
-                        settings.state.pathMatcher,
-                        KeyStyle.NESTED,
-                    )
-
-                    val locales = repo.scanLocales()
-                    val values = mutableMapOf<String, String?>()
-                    val localeFiles = mutableMapOf<String, File>()
-                    val allLocales = settings.state.displayLocales.ifEmpty { listOf(settings.sourceLocale) }
-
-                    // 收集所有语言的值和文件
-                    for (localeKeys in locales) {
-                        val value = localeKeys.keys.find { it == key }
-                        values[localeKeys.locale] = value
-                        localeFiles[localeKeys.locale] = localeKeys.file
-                    }
-
-                    // 打开编辑对话框
-                    val dialog = KeyEditorDialog(
-                        project = project,
-                        key = key,
-                        sourceLocale = settings.sourceLocale,
-                        values = values,
-                        locales = allLocales,
-                        localeFiles = localeFiles,
-                        onSaved = { /* 刷新 UI */ }
-                    )
-                    dialog.show()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+        ApplicationManager.getApplication().invokeLater {
+            if (project.isDisposed) return@invokeLater
+            try {
+                openKeyEditor(project, key, project.getService(I18nPanelService::class.java))
+            } catch (e: ProcessCanceledException) {
+                throw e
+            } catch (e: Exception) {
+                Logger.getInstance(I18nHoverDocumentationProvider::class.java).warn("打开翻译编辑器失败", e)
+                Messages.showErrorDialog(project, "无法打开翻译编辑器：${e.message}", "i18n 编辑失败")
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
-        return null
+        return true
     }
 
+    /** 遵循项目设置读取译文，避免悬停与行内提示使用不同的 key 风格。 */
     private fun findTranslationHtml(element: PsiElement): String? {
         try {
-            val file = element.containingFile ?: return null
             val project = element.project
-            val settings = I18nSettings.getInstance(project)
+            val context = I18nContext.of(project)
 
             // 获取光标位置的文本（通常是字符串或标识符）
             val text = element.text
@@ -112,26 +75,24 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
             val projectRoot = project.basePath ?: return null
 
             // 获取展示的语言列表（优先使用 displayLocales，否则使用源语言）
-            val displayLocalesList = if (settings.state.displayLocales.isNotEmpty()) {
-                settings.state.displayLocales
-            } else {
-                listOf(settings.sourceLocale)
-            }
+            val displayLocalesList = context.displayLocales.ifEmpty { listOf(context.sourceLocale) }
 
             // 从语言包里查找这个 key 的所有翻译
             val allValues = mutableMapOf<String, String>()
             for (locale in displayLocalesList) {
                 try {
-                    val fallback = if (locale != settings.sourceLocale) settings.sourceLocale else ""
+                    val fallback = if (context.fallbackToSource && locale != context.sourceLocale) context.sourceLocale else ""
                     val values = TranslationIndex.values(
                         projectRoot = projectRoot,
                         locale = locale,
                         fallbackLocale = fallback,
-                        localesDir = settings.localesPath,
-                        pathMatcher = settings.state.pathMatcher,
-                        keyStyle = com.hegg5577.i18n.locale.KeyStyle.NESTED,
+                        localesDir = context.localesPath,
+                        pathMatcher = context.pathMatcher,
+                        keyStyle = context.keyStyle,
                     )
                     allValues[locale] = values[key] ?: ""
+                } catch (e: ProcessCanceledException) {
+                    throw e
                 } catch (e: Exception) {
                     allValues[locale] = ""
                 }
@@ -141,6 +102,8 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
             if (allValues.all { it.value.isEmpty() }) return null
 
             return buildHoverHtml(key, allValues)
+        } catch (e: ProcessCanceledException) {
+            throw e
         } catch (e: Exception) {
             return null
         }
@@ -161,7 +124,8 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
         }
     }
 
-    private fun buildHoverHtml(key: String, translations: Map<String, String>): String {
+    /** 编辑链接走点击处理入口，避免文档目标解析阶段触发弹窗。 */
+    internal fun buildHoverHtml(key: String, translations: Map<String, String>): String {
         val sb = StringBuilder()
         sb.append("<html><body style='font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;'>")
 
@@ -189,7 +153,7 @@ class I18nHoverDocumentationProvider : DocumentationProvider {
         // 链接：打开 Key 编辑对话框
         val encodedKey = java.net.URLEncoder.encode(key, "UTF-8")
         sb.append("<div style='margin-top: 12px;'>")
-        sb.append("<a href='i18n.edit?key=$encodedKey' style='color: #0066cc; text-decoration: underline; cursor: pointer; font-size: 13px;'>✎ Edit this key</a>")
+        sb.append("<a href=\"i18n.edit?key=$encodedKey\">✎ Edit this key</a>")
         sb.append("</div>")
 
         sb.append("</body></html>")

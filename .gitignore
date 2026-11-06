@@ -8,3 +8,8 @@ out/
 
 # IntelliJ Platform Gradle Plugin 生成的本地缓存与沙盒 IDE 配置
 .intellijPlatform/
+
+# 发布暂存及开发助手笔记不进入公开仓库。
+.publish/
+.workbuddy/
+memory/

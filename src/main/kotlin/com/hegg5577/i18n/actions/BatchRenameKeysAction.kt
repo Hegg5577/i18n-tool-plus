@@ -12,6 +12,7 @@ import com.hegg5577.i18n.locale.TranslationSaver
 import com.hegg5577.i18n.settings.I18nContext
 import com.hegg5577.i18n.ui.BatchOperationDialog
 import com.hegg5577.i18n.ui.TranslationTablePanel
+import com.hegg5577.i18n.ui.I18nPanelService
 
 class BatchRenameKeysAction : AnAction() {
 
@@ -44,6 +45,7 @@ class BatchRenameKeysAction : AnAction() {
         performPrefixReplace(project, selectedKeys, repository)
     }
 
+    /** 校验单个新名称，保存重命名结果后刷新面板。 */
     private fun performSingleRename(
         project: Project,
         oldKey: String,
@@ -70,18 +72,14 @@ class BatchRenameKeysAction : AnAction() {
 
         if (newKey == oldKey) return
 
-        val result = TranslationSaver.renameKey(project, repository, oldKey, newKey)
+        val result = renameWithReferences(project, repository, oldKey, newKey)
+
+        if (result.succeeded.isNotEmpty()) {
+            project.getService(I18nPanelService::class.java).refresh()
+        }
 
         if (result.isSuccess) {
             notify(project, "成功重命名 Key，可按 Ctrl+Z 撤销", NotificationType.INFORMATION)
-            RefreshPanelAction().actionPerformed(
-                AnActionEvent.createFromInputEvent(
-                    null,
-                    com.intellij.openapi.actionSystem.ActionPlaces.UNKNOWN,
-                    com.intellij.openapi.actionSystem.Presentation(),
-                    com.intellij.openapi.actionSystem.DataContext { null }
-                )
-            )
         } else {
             val message = buildString {
                 appendLine("重命名失败。详情：")
@@ -93,6 +91,7 @@ class BatchRenameKeysAction : AnAction() {
         }
     }
 
+    /** 批量替换匹配的前缀，在保存结果返回后统一刷新面板。 */
     private fun performPrefixReplace(
         project: Project,
         selectedKeys: List<String>,
@@ -147,10 +146,16 @@ class BatchRenameKeysAction : AnAction() {
 
         var succeeded = 0
         var failed = 0
+        var hasChanges = false
 
         for ((oldKey, newKey) in mapping) {
-            val result = TranslationSaver.renameKey(project, repository, oldKey, newKey)
+            val result = renameWithReferences(project, repository, oldKey, newKey)
+            if (result.succeeded.isNotEmpty()) hasChanges = true
             if (result.isSuccess) succeeded++ else failed++
+        }
+
+        if (hasChanges) {
+            project.getService(I18nPanelService::class.java).refresh()
         }
 
         val message = when {
@@ -159,6 +164,24 @@ class BatchRenameKeysAction : AnAction() {
         }
 
         notify(project, message, NotificationType.INFORMATION)
+    }
+
+    /** 复用源码重命名准备逻辑，使表格入口也不会留下旧引用。 */
+    private fun renameWithReferences(
+        project: Project,
+        repository: LocaleRepository,
+        oldKey: String,
+        newKey: String,
+    ): TranslationSaver.Result {
+        if (oldKey == newKey) return TranslationSaver.Result()
+        return try {
+            val updates = I18nRenameKeyHandler().prepareSourceUpdates(project, I18nContext.of(project), oldKey, newKey)
+            TranslationSaver.renameKey(project, repository, oldKey, newKey, updates)
+        } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
+            throw e
+        } catch (e: Exception) {
+            TranslationSaver.Result(failed = mapOf(oldKey to (e.message ?: "源码引用更新失败")))
+        }
     }
 
     override fun update(e: AnActionEvent) {
@@ -173,11 +196,12 @@ class BatchRenameKeysAction : AnAction() {
         }
     }
 
+    /** 按组件类型定位翻译表格，避免依赖页签顺序。 */
     private fun findTablePanel(project: Project): TranslationTablePanel? {
         val toolWindow = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
             .getToolWindow("i18n-helper") ?: return null
-        val content = toolWindow.contentManager.getContent(0) ?: return null
-        return content.component as? TranslationTablePanel
+        return toolWindow.contentManager.contents
+            .firstNotNullOfOrNull { it.component as? TranslationTablePanel }
     }
 
     private fun notify(project: Project, message: String, type: NotificationType) {

@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * 译文查询索引：把语言包预解析成 `key -> value` 的扁平映射，供编辑器高频查询。
  *
- * 缓存指纹包含「语言包修改时间 + 全部相关配置」，配置一改就自动重新解析 ——
+ * 缓存指纹包含「全部语言包路径、修改时间、大小 + 全部相关配置」，配置一改就自动重新解析 ——
  * 用户改完设置立刻生效，不需要手动清缓存。
  */
 object TranslationIndex {
@@ -55,10 +55,15 @@ object TranslationIndex {
         if (projectRoot == null) return emptyMap()
 
         val cacheKey = "$projectRoot|$localesDir|$pathMatcher"
+        val resolved = PathMatcher(pathMatcher).resolve(File(projectRoot, localesDir))
         val fingerprint = buildString {
             append(locale).append('|').append(fallbackLocale).append('|').append(keyStyle).append('|')
             for (l in listOf(locale, fallbackLocale).filter { it.isNotBlank() }) {
-                append(localeFile(projectRoot, l, localesDir, pathMatcher).lastModified()).append('|')
+                append(l).append('|')
+                for (file in resolved.filter { it.locale == l }.map { it.file }) {
+                    append(file.path).append(':').append(file.lastModified())
+                        .append(':').append(file.length()).append('|')
+                }
             }
         }
 

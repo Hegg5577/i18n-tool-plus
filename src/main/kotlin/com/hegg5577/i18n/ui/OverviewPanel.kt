@@ -6,12 +6,12 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
+import java.awt.Component
 import java.awt.Dimension
 import java.awt.FlowLayout
-import javax.swing.JLabel
+import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JProgressBar
-import javax.swing.SwingConstants
 
 /**
  * 「概览」面板：翻译项目的一眼概览。
@@ -63,7 +63,7 @@ class OverviewPanel : JPanel(BorderLayout()) {
             })
 
             add(statsLabel.apply {
-                border = JBUI.Borders.empty(6)
+                border = JBUI.Borders.empty(6, 0)
             })
 
             // 快捷操作
@@ -80,6 +80,11 @@ class OverviewPanel : JPanel(BorderLayout()) {
                 border = JBUI.Borders.empty(6)
             }
             add(actionsPanel)
+
+            // BoxLayout 按各组件的对齐轴排布，统一左对齐以免短标题和统计文字偏到中间。
+            components.forEach { component ->
+                if (component is JComponent) component.alignmentX = Component.LEFT_ALIGNMENT
+            }
         }
 
         add(body, BorderLayout.CENTER)

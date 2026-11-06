@@ -11,7 +11,7 @@ import com.hegg5577.i18n.locale.TranslationSaver
 import com.hegg5577.i18n.settings.I18nContext
 import com.hegg5577.i18n.ui.BatchOperationDialog
 import com.hegg5577.i18n.ui.TranslationTablePanel
-import java.io.File
+import com.hegg5577.i18n.ui.I18nPanelService
 
 /**
  * 批量删除选中的 Key。
@@ -20,6 +20,7 @@ import java.io.File
  */
 class BatchDeleteKeysAction : AnAction() {
 
+    /** 从翻译表格读取选中项，保存删除结果后刷新面板。 */
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
         val tablePanel = findTablePanel(project) ?: run {
@@ -52,14 +53,16 @@ class BatchDeleteKeysAction : AnAction() {
         // 执行删除
         val result = TranslationSaver.deleteKeys(project, repository, selectedKeys)
 
+        if (result.succeeded.isNotEmpty()) {
+            project.getService(I18nPanelService::class.java).refresh()
+        }
+
         if (result.isSuccess) {
             notify(
                 project,
                 "成功删除 ${result.succeeded.size} 个语言的 Key，可按 Ctrl+Z 撤销",
                 NotificationType.INFORMATION,
             )
-            // 刷新表格
-            RefreshPanelAction().actionPerformed(event)
         } else {
             val message = buildString {
                 appendLine("删除失败。详情：")
@@ -86,12 +89,12 @@ class BatchDeleteKeysAction : AnAction() {
         }
     }
 
+    /** 按组件类型定位翻译表格，避免依赖页签顺序。 */
     private fun findTablePanel(project: Project): TranslationTablePanel? {
-        // 通过 ToolWindow 获取表格面板
         val toolWindow = com.intellij.openapi.wm.ToolWindowManager.getInstance(project)
             .getToolWindow("i18n-helper") ?: return null
-        val content = toolWindow.contentManager.getContent(0) ?: return null
-        return content.component as? TranslationTablePanel
+        return toolWindow.contentManager.contents
+            .firstNotNullOfOrNull { it.component as? TranslationTablePanel }
     }
 
     private fun notify(project: Project, message: String, type: NotificationType) {

@@ -3,6 +3,7 @@ package com.hegg5577.i18n.locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -100,9 +101,10 @@ class UsageScannerTest {
     }
 
     @Test
+    /** 外部样例项目可选，避免其他开发者因缺少本机数据而失败。 */
     fun `真实项目能找出缺失的 key`() {
-        val projectRoot = File("E:/CompanyItem/ai-station-web")
-        assertTrue("真实项目不存在，跳过：$projectRoot", projectRoot.isDirectory)
+        val projectRoot = File(System.getenv("I18N_TEST_PROJECT") ?: "test-project")
+        assumeTrue("真实项目不存在，跳过：$projectRoot", projectRoot.isDirectory)
 
         val report = UsageScanner.analyze(
             projectRoot = projectRoot,

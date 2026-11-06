@@ -15,25 +15,26 @@ import com.hegg5577.i18n.settings.I18nContext
 @Service(Service.Level.PROJECT)
 class TranslationEngineManager(private val project: Project) {
 
-    /** 所有注册的引擎。 */
-    private val engines: Map<String, TranslationEngine> by lazy {
-        val context = I18nContext.of(project)
-        mapOf(
-            // Google 翻译：免费，无需配置
-            GoogleTranslationEngine().let { it.id to it },
-            // DeepL：需要配置 API Key
-            DeepLTranslationEngine(
-                apiKey = context.deeplApiKey,
-                isFreeApi = context.deeplIsFreeApi,
-            ).let { it.id to it },
-            // OpenAI：需要配置 API Key
-            OpenAITranslationEngine(
-                apiKey = context.openaiApiKey,
-                model = context.openaiModel,
-                baseUrl = context.openaiBaseUrl,
-            ).let { it.id to it },
-        )
-    }
+    /** 按最新配置创建引擎，避免永久缓存旧密钥、模型和端点。 */
+    private val engines: Map<String, TranslationEngine>
+        get() {
+            val context = I18nContext.of(project)
+            return mapOf(
+                // Google 翻译：免费，无需配置
+                GoogleTranslationEngine().let { it.id to it },
+                // DeepL：需要配置 API Key
+                DeepLTranslationEngine(
+                    apiKey = context.deeplApiKey,
+                    isFreeApi = context.deeplIsFreeApi,
+                ).let { it.id to it },
+                // OpenAI：需要配置 API Key
+                OpenAITranslationEngine(
+                    apiKey = context.openaiApiKey,
+                    model = context.openaiModel,
+                    baseUrl = context.openaiBaseUrl,
+                ).let { it.id to it },
+            )
+        }
 
     /** 获取所有可用的引擎列表。 */
     fun listEngines(): List<TranslationEngine> = engines.values.toList()
@@ -67,6 +68,7 @@ class TranslationEngineManager(private val project: Project) {
     }
 
     companion object {
+        /** 获取项目的翻译引擎管理器。 */
         fun getInstance(project: Project): TranslationEngineManager =
             project.getService(TranslationEngineManager::class.java)
     }

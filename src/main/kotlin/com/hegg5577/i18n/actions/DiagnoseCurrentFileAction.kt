@@ -12,6 +12,7 @@ import com.hegg5577.i18n.editor.I18nInlayCollector
 import com.hegg5577.i18n.editor.I18nInlayProviderFactory
 import com.hegg5577.i18n.editor.KeyUsageScanner
 import com.hegg5577.i18n.locale.TranslationIndex
+import com.hegg5577.i18n.settings.I18nContext
 import com.hegg5577.i18n.ui.DiagnosticDialog
 import com.hegg5577.i18n.ui.DiagnosticItem
 
@@ -62,26 +63,38 @@ class DiagnoseCurrentFileAction : AnAction() {
         val conclusion: String,
     )
 
+    /** 与收集器读取同一份配置，避免自定义语言或路径时给出错误结论。 */
     private fun diagnose(project: Project, file: PsiFile, text: String): Diagnosis {
+        val context = I18nContext.of(project)
         val projectRoot = project.basePath
         val languageId = file.language.id
-        val values = TranslationIndex.values(projectRoot)
+        val locale = context.effectiveAnnotationLocale
+        val fallback = if (context.fallbackToSource) context.sourceLocale else ""
+        val values = TranslationIndex.values(
+            projectRoot = projectRoot,
+            locale = locale,
+            fallbackLocale = fallback,
+            localesDir = context.localesPath,
+            pathMatcher = context.pathMatcher,
+            keyStyle = context.keyStyle,
+        )
 
         val hits = ArrayList<KeyUsageScanner.Usage>()
         val resolved = ArrayList<Pair<KeyUsageScanner.Usage, String>>()
         val missed = LinkedHashSet<String>()
-        for (usage in KeyUsageScanner.scan(text)) {
+        for (usage in KeyUsageScanner.scan(text, context.usageMatchRegex)) {
             hits += usage
             val translated = values[usage.key]
             if (translated == null) missed += usage.key else resolved += usage to translated
         }
 
         val tooLarge = KeyUsageScanner.isTooLarge(text.length)
-        val extSupported = TranslationIndex.isSupported(file.name)
+        val extSupported = TranslationIndex.isSupported(file.name, context.supportedExtensions)
         val langSupported = I18nInlayProviderFactory.supports(languageId)
         val providerVisible = providerRegistered(file)
 
-        val willShow = extSupported && langSupported && providerVisible && !tooLarge
+        val willShow = context.isValid && context.inlineAnnotationEnabled &&
+            extSupported && langSupported && providerVisible && !tooLarge
 
         val sections = buildList {
             add("当前文件" to listOf(
@@ -89,18 +102,19 @@ class DiagnoseCurrentFileAction : AnAction() {
             ))
 
             add("加载判定" to listOf(
-                DiagnosticItem(extSupported, "后缀在支持列表内", "js / jsx / ts / tsx / vue / html", if (extSupported) "" else "该文件不会被扫描"),
+                DiagnosticItem(context.inlineAnnotationEnabled, "已启用行内译文提示", "提示语言：$locale", if (context.inlineAnnotationEnabled) "" else "请在 i18n tool plus 设置中启用"),
+                DiagnosticItem(extSupported, "后缀在支持列表内", context.supportedExtensions.ifEmpty { TranslationIndex.DEFAULT_EXTENSIONS }.joinToString(" / "), if (extSupported) "" else "该文件不会被扫描"),
                 DiagnosticItem(langSupported, "语言 ID 已绑定 Provider", languageId, if (langSupported) "" else "需补进 I18nInlayProviderFactory.LANGUAGE_IDS"),
                 DiagnosticItem(providerVisible, "扩展点已生效", I18nInlayCollector.PROVIDER_ID, if (providerVisible) "" else "检查 plugin.xml 的 declarativeInlayProviderFactory"),
                 DiagnosticItem(!tooLarge, "文件大小在上限内", "上限 ${fmt(KeyUsageScanner.MAX_FILE_LENGTH)} 字符", if (!tooLarge) "" else "文件过大，已跳过"),
             ))
 
             add("项目与语言包" to buildList {
-                add(DiagnosticItem(projectRoot != null, "项目根定位", projectRoot ?: "无法获取", if (projectRoot != null) "" else "检查项目是否已打开"))
+                add(DiagnosticItem(context.isValid, "项目根定位", projectRoot ?: "无法获取", if (context.isValid) "" else "检查项目根目录是否存在"))
                 if (projectRoot != null) {
-                    for (locale in listOf(TranslationIndex.DEFAULT_LOCALE, TranslationIndex.FALLBACK_LOCALE)) {
-                        val count = TranslationIndex.countFor(projectRoot, locale)
-                        add(DiagnosticItem(count > 0, "$locale 语言包可用", "$locale · ${fmt(count)} 个 key", if (count > 0) "" else "语言包未找到或解析失败"))
+                    for (language in listOf(locale, fallback).filter { it.isNotBlank() }.distinct()) {
+                        val count = TranslationIndex.countFor(projectRoot, language, context.localesPath, context.pathMatcher, context.keyStyle)
+                        add(DiagnosticItem(count > 0, "$language 语言包可用", "$language · ${fmt(count)} 个 key", if (count > 0) "" else "语言包未找到或解析失败"))
                     }
                     add(DiagnosticItem(values.isNotEmpty(), "可用于提示的 key", "${fmt(values.size)} 个", if (values.isNotEmpty()) "" else "索引为空，行内提示不会出现"))
                 }

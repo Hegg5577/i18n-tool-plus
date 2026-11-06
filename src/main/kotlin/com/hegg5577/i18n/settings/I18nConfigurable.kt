@@ -71,7 +71,8 @@ class I18nConfigurable(private val project: Project) : Configurable {
 
     private var panel: JComponent? = null
 
-    override fun getDisplayName(): String = "i18n Helper"
+    /** 与插件发布名称保持一致，方便用户定位设置入口。 */
+    override fun getDisplayName(): String = "i18n tool plus"
 
     override fun createComponent(): JComponent {
         val root = JPanel(BorderLayout())
@@ -91,7 +92,7 @@ class I18nConfigurable(private val project: Project) : Configurable {
                 }
             )
             .addLabeledComponent(JBLabel("源语言"), sourceLocaleField, 1, false)
-            .addLabeledComponent(JBLabel("行内提示语言"), annotationLocaleField, 1, false)
+            .addLabeledComponent(JBLabel("行内提示语言（留空跟随首选展示语言）"), annotationLocaleField, 1, false)
             .addLabeledComponent(JBLabel("优先展示的语言（逗号分隔）"), displayLocalesField, 1, false)
             .addLabeledComponent(JBLabel("key 风格"), keyStyleCombo, 1, false)
             .addLabeledComponent(JBLabel("扫描的文件后缀（逗号分隔）"), extensionsField, 1, false)
@@ -168,7 +169,6 @@ class I18nConfigurable(private val project: Project) : Configurable {
         translationEnginePanel.apply()
 
         // 配置变了，缓存必须失效，否则面板与行内提示还显示旧数据
-        com.hegg5577.i18n.locale.TranslationIndex.invalidate()
         project.getService(com.hegg5577.i18n.ui.I18nPanelService::class.java).refresh()
     }
 

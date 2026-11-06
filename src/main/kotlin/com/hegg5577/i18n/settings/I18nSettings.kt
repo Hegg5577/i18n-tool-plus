@@ -76,7 +76,7 @@ class I18nSettings : PersistentStateComponent<I18nSettings.State> {
         var inlineAnnotationEnabled: Boolean = true,
 
         /** 行内提示的译文语言；为空表示跟随 [displayLocales] 第一项。 */
-        var annotationLocale: String = "zh",
+        var annotationLocale: String = "",
 
         /** 首选语言缺 key 时是否回退显示源语言原文。 */
         var fallbackToSource: Boolean = true,

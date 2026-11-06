@@ -1,9 +1,9 @@
 package com.hegg5577.i18n.locale
 
-import com.hegg5577.i18n.editor.DefaultPatterns
 import com.hegg5577.i18n.editor.KeyUsageScanner
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 
@@ -16,11 +16,12 @@ import java.io.File
  */
 class RealProjectScanTest {
 
-    /** 真实项目根，按需调整；不存在时整类跳过。 */
-    private val projectRoot = File("E:/CompanyItem/ai-station-web")
+    /** 外部测试数据由开发者显式提供，避免依赖公司目录。 */
+    private val projectRoot = File(System.getenv("I18N_TEST_PROJECT") ?: "test-project")
 
+    /** 未提供外部数据时跳过，保证公开源码不依赖开发者本机文件。 */
     private fun requireProject() {
-        assertTrue(
+        assumeTrue(
             "真实项目不存在，跳过：${projectRoot.path}",
             projectRoot.isDirectory,
         )

@@ -5,22 +5,19 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.command.WriteCommandAction
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
-import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.openapi.vfs.VirtualFile
-import com.hegg5577.i18n.locale.LocaleFileWriter
 import com.hegg5577.i18n.locale.LocaleRepository
-import com.hegg5577.i18n.translator.GoogleTranslationEngine
+import com.hegg5577.i18n.locale.TranslationSaver
 import com.hegg5577.i18n.translator.PlaceholderProtector
 import com.hegg5577.i18n.translator.TranslationEngine
+import com.hegg5577.i18n.translator.TranslationEngineManager
 import com.hegg5577.i18n.translator.TranslationException
+import com.hegg5577.i18n.ui.I18nPanelService
 import java.io.File
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -28,7 +25,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * 批量翻译：把源语言（en）里已有、目标语言里缺失的 key 自动补齐。
+ * 批量翻译：把配置的源语言里已有、目标语言里缺失的 key 自动补齐。
  *
  * 设计上刻意保守，因为这一步会**改写磁盘上的语言包**：
  * - 默认只补缺失 key，**绝不覆盖已存在的人工译文**；
@@ -39,12 +36,13 @@ import java.util.concurrent.Executors
 class BatchTranslateAction : AnAction() {
 
     /** 待翻译的最小单元：同一语言下，相同原文的多条 key 合并成一次请求。 */
-    private class TranslateUnit(
+    internal class TranslateUnit(
         val locale: String,
         val sourceText: String,
         val keys: List<String>,
     )
 
+    /** 使用配置的引擎生成预览，并将同一引擎交给后台任务。 */
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
         val root = project.basePath?.let(::File)
@@ -78,9 +76,10 @@ class BatchTranslateAction : AnAction() {
             return
         }
 
+        val engine = TranslationEngineManager.getInstance(project).getActiveEngine()
         val answer = Messages.showYesNoDialog(
             project,
-            buildPreview(units, context.sourceLocale),
+            buildPreview(units, context.sourceLocale, engine),
             TITLE,
             "开始翻译",
             "取消",
@@ -88,7 +87,7 @@ class BatchTranslateAction : AnAction() {
         )
         if (answer != Messages.YES) return
 
-        runTranslation(project, repository, units, context.sourceLocale)
+        runTranslation(project, repository, units, context.sourceLocale, engine)
     }
 
     /** 把「各语言缺失 key」压平成去重后的翻译单元。 */
@@ -111,7 +110,8 @@ class BatchTranslateAction : AnAction() {
         return units
     }
 
-    private fun buildPreview(units: List<TranslateUnit>, sourceLocale: String): String {
+    /** 展示缺失项及本次实际使用的引擎，让预览与请求保持一致。 */
+    internal fun buildPreview(units: List<TranslateUnit>, sourceLocale: String, engine: TranslationEngine): String {
         val perLocale = LinkedHashMap<String, Int>()
         var totalKeys = 0
         for (unit in units) {
@@ -136,18 +136,21 @@ class BatchTranslateAction : AnAction() {
             }
             if (units.size > 3) appendLine("  … 其余 ${units.size - 3} 条省略")
             appendLine()
-            appendLine("翻译引擎：${ENGINE.displayName}")
+            appendLine("翻译引擎：${engine.displayName}")
         }
     }
 
+    /** 并发调用本次选定的引擎，汇总翻译与保存失败并刷新面板。 */
     private fun runTranslation(
         project: Project,
         repository: LocaleRepository,
         units: List<TranslateUnit>,
         sourceLocale: String,
+        engine: TranslationEngine,
     ) {
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "i18n: 批量翻译语言包", true) {
+                /** 后台翻译结束后统一保存，避免逐条请求直接改写语言包。 */
                 override fun run(indicator: ProgressIndicator) {
                     indicator.isIndeterminate = false
                     indicator.fraction = 0.0
@@ -159,7 +162,7 @@ class BatchTranslateAction : AnAction() {
                     try {
                         val futures = LinkedHashMap<TranslateUnit, java.util.concurrent.Future<String>>()
                         for (unit in units) {
-                            futures[unit] = executor.submit<String> { translateUnit(unit, sourceLocale) }
+                            futures[unit] = executor.submit<String> { translateUnit(unit, sourceLocale, engine) }
                         }
 
                         var done = 0
@@ -187,9 +190,13 @@ class BatchTranslateAction : AnAction() {
                     indicator.text = "正在写入语言包…"
                     indicator.isIndeterminate = true
 
-                    val written = writeBack(project, repository, byLocale)
+                    val result = writeBack(project, repository, sourceLocale, byLocale)
+                    failures += result.failed.map { (locale, reason) -> "$locale 保存失败：$reason" }
 
-                    ApplicationManager.getApplication().invokeAndWait { notifyResult(project, written, failures) }
+                    ApplicationManager.getApplication().invokeAndWait {
+                        project.getService(I18nPanelService::class.java).refresh()
+                        notifyResult(project, result.succeeded, failures)
+                    }
                 }
             }
         )
@@ -199,49 +206,33 @@ class BatchTranslateAction : AnAction() {
      * 单个翻译单元：套占位符保护 → 调引擎 → 还原。
      * 还原失败（占位符被翻译引擎改动或吞掉）时抛异常，该条被丢弃而不是写入坏内容。
      */
-    private fun translateUnit(unit: TranslateUnit, sourceLocale: String): String {
+    internal fun translateUnit(unit: TranslateUnit, sourceLocale: String, engine: TranslationEngine): String {
         val protected = PlaceholderProtector.protect(unit.sourceText)
-        val raw = ENGINE.translateOne(protected.text, unit.locale, sourceLocale)
+        val raw = engine.translate(listOf(protected.text), unit.locale, sourceLocale).singleOrNull()
+            ?: throw TranslationException("翻译引擎未返回 ${unit.locale} 的单条译文")
         return protected.restore(raw)
             ?: throw TranslationException("占位符在翻译后丢失，为保证质量已丢弃该条")
     }
 
-    /** 写回磁盘。通过 VFS Document 写入，让整批改动可被 Ctrl+Z 撤销。 */
+    /** 保存前重新检查缺失项，避免覆盖翻译等待期间补入的人工译文。 */
     private fun writeBack(
         project: Project,
         repository: LocaleRepository,
+        sourceLocale: String,
         byLocale: Map<String, Map<String, String>>,
-    ): List<String> {
-        if (byLocale.isEmpty()) return emptyList()
-
-        // VFS 定位放在写操作之前做，避免把刷新混进写命令里
-        val targets = LinkedHashMap<String, VirtualFile>()
-        for (locale in byLocale.keys) {
-            val file = repository.localeFile(locale) ?: continue
-            val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)
-            if (virtualFile != null) targets[locale] = virtualFile
-        }
-
-        val written = ArrayList<String>()
-        ApplicationManager.getApplication().invokeAndWait {
-            WriteCommandAction.runWriteCommandAction(project) {
-                for ((locale, values) in byLocale) {
-                    val virtualFile = targets[locale] ?: continue
-                    val document = FileDocumentManager.getInstance().getDocument(virtualFile) ?: continue
-
-                    val json = com.google.gson.JsonParser.parseString(document.text).asJsonObject
-                    for ((key, value) in values) {
-                        LocaleFileWriter.setNested(json, key, value)
-                    }
-
-                    document.setText(LocaleFileWriter.render(json))
-                    FileDocumentManager.getInstance().saveDocument(document)
-                    written += locale
-                }
-            }
-        }
-        return written
+    ): TranslationSaver.Result {
+        val edits = missingEdits(repository, byLocale)
+        return TranslationSaver.save(project, repository, sourceLocale, edits, onlyMissing = true)
     }
+
+    /** 已存在的 key 即使值为空也保留，批量操作只补真正缺失的项。 */
+    internal fun missingEdits(
+        repository: LocaleRepository,
+        byLocale: Map<String, Map<String, String>>,
+    ): Map<String, Map<String, String>> = byLocale.mapValues { (locale, values) ->
+        val existing = repository.valuesOf(locale)
+        values.filterKeys { it !in existing }
+    }.filterValues { it.isNotEmpty() }
 
     private fun notifyResult(project: Project, written: List<String>, failures: List<String>) {
         val message = buildString {
@@ -270,12 +261,5 @@ class BatchTranslateAction : AnAction() {
     private companion object {
         const val TITLE = "i18n: 批量翻译"
         const val CONCURRENCY = 4
-
-        /**
-         * 当前默认使用免费且免密钥的 Google 端点。
-         * 用具体类型而非 [TranslationEngine] 是因为这里需要 `translateOne`（逐条），
-         * 而这个引擎实测不支持一次多条的批量请求。
-         */
-        val ENGINE: GoogleTranslationEngine = GoogleTranslationEngine()
     }
 }
