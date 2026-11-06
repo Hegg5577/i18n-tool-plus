@@ -4,8 +4,10 @@ import com.hegg5577.i18n.editor.KeyUsageScanner
 import com.hegg5577.i18n.settings.I18nContext
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import java.io.File
+import java.nio.file.Files
 
 /** 覆盖源码 key 的精确替换、最新文档读取及准备失败时不写入的行为。 */
 class I18nRenameKeyActionTest : BasePlatformTestCase() {
@@ -59,25 +61,38 @@ class I18nRenameKeyActionTest : BasePlatformTestCase() {
 
     /** 从未保存的 Document 读取引用，并遵守源码目录、扩展名和依赖目录限制。 */
     fun testPreparationUsesLatestDocumentAndConfiguredScope() {
-        val source = myFixture.addFileToProject("src/current.js", "t('disk.key');")
-        myFixture.addFileToProject("outside/ignored.js", "t('old.key');")
-        myFixture.addFileToProject("src/ignored.ts", "t('old.key');")
-        myFixture.addFileToProject("src/node_modules/ignored.js", "t('old.key');")
-        val document = FileDocumentManager.getInstance().getDocument(source.virtualFile)!!
-        WriteCommandAction.runWriteCommandAction(project) {
-            document.setText("t('old.key'); const label = 'old.key';")
+        // prepareSourceUpdates 用 LocalFileSystem（真实磁盘）扫描源码，
+        // 因此必须用真实磁盘临时目录，不能用 myFixture.addFileToProject ——
+        // 后者落在内存虚拟 VFS（temp:///），LocalFileSystem 扫不到。
+        val root = Files.createTempDirectory("i18n-rename-scope").toFile()
+        try {
+            val current = File(root, "src/current.js").apply {
+                parentFile.mkdirs(); writeText("t('disk.key');")
+            }
+            File(root, "outside/ignored.js").apply { parentFile.mkdirs(); writeText("t('old.key');") }
+            File(root, "src/ignored.ts").apply { parentFile.mkdirs(); writeText("t('old.key');") }
+            File(root, "src/node_modules/ignored.js").apply { parentFile.mkdirs(); writeText("t('old.key');") }
+
+            val document = FileDocumentManager.getInstance()
+                .getDocument(LocalFileSystem.getInstance().refreshAndFindFileByIoFile(current)!!)!!
+            WriteCommandAction.runWriteCommandAction(project) {
+                document.setText("t('old.key'); const label = 'old.key';")
+            }
+
+            val context = I18nContext.of(project).copy(
+                projectRoot = root,
+                sourceDirs = listOf("src"),
+                supportedExtensions = setOf("js"),
+                usageMatchRegex = emptyList(),
+            )
+
+            val updates = I18nRenameKeyHandler().prepareSourceUpdates(project, context, "old.key", "new.key")
+
+            assertEquals(mapOf(document to "t('new.key'); const label = 'old.key';"), updates)
+            assertEquals("t('old.key'); const label = 'old.key';", document.text)
+        } finally {
+            root.deleteRecursively()
         }
-        val context = I18nContext.of(project).copy(
-            projectRoot = File(myFixture.tempDirFixture.tempDirPath),
-            sourceDirs = listOf("src", "src"),
-            supportedExtensions = setOf("js"),
-            usageMatchRegex = emptyList(),
-        )
-
-        val updates = I18nRenameKeyHandler().prepareSourceUpdates(project, context, "old.key", "new.key")
-
-        assertEquals(mapOf(document to "t('new.key'); const label = 'old.key';"), updates)
-        assertEquals("t('old.key'); const label = 'old.key';", document.text)
     }
 
     /** 提示扫描的截断不能让重命名留下旧引用，达到上限时必须停止准备。 */
