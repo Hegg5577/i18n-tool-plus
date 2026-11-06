@@ -1,6 +1,9 @@
 package com.hegg5577.i18n.ui
 
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.ValidationInfo
@@ -199,32 +202,34 @@ class KeyEditorDialog(
             return
         }
 
-        ProgressManager.getInstance().runProcessWithProgressSynchronously(
-            {
-                try {
-                    doAutoTranslate(sourceText, targetLocales)
-                } catch (e: Exception) {
-                    com.intellij.openapi.ui.Messages.showErrorDialog(
-                        project,
-                        "翻译失败：${e.message}",
-                        "自动翻译失败",
-                    )
+        // 网络请求必须放在后台线程：翻译引擎走 HttpURLConnection，
+        // 若沿用 runProcessWithProgressSynchronously(Runnable) 会在 EDT 上阻塞 UI，
+        // 属于 JetBrains 插件规范明确禁止的「EDT 上做网络 I/O」。
+        ProgressManager.getInstance().run(
+            object : Task.Backgroundable(project, "翻译中…", true) {
+                override fun run(indicator: ProgressIndicator) {
+                    val engine = TranslationEngineManager.getInstance(project).getActiveEngine()
+                    try {
+                        val results = translateTargets(engine, sourceText, sourceLocale, targetLocales)
+                        ApplicationManager.getApplication().invokeLater {
+                            if (project.isDisposed) return@invokeLater
+                            for ((locale, translated) in results) {
+                                fields[locale]?.text = translated
+                            }
+                        }
+                    } catch (e: Exception) {
+                        ApplicationManager.getApplication().invokeLater {
+                            if (project.isDisposed) return@invokeLater
+                            com.intellij.openapi.ui.Messages.showErrorDialog(
+                                project,
+                                "翻译失败：${e.message}",
+                                "自动翻译失败",
+                            )
+                        }
+                    }
                 }
-            },
-            "翻译中…",
-            true,
-            project,
+            }
         )
-    }
-
-    /** 按各自目标语言翻译后填入编辑框，避免把第一种语言的结果复用给其它语言。 */
-    private fun doAutoTranslate(sourceText: String, targetLocales: List<String>) {
-        val manager = TranslationEngineManager.getInstance(project)
-        val engine = manager.getActiveEngine()
-
-        for ((locale, translated) in translateTargets(engine, sourceText, sourceLocale, targetLocales)) {
-            fields[locale]?.text = translated
-        }
     }
 
     companion object {
