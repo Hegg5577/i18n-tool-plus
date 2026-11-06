@@ -1,8 +1,8 @@
 package com.hegg5577.i18n.generator
 
-import org.junit.jupiter.api.Test
-import kotlin.test.assertTrue
-import kotlin.test.assertContains
+import com.hegg5577.i18n.locale.KeyStyle
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 class TypeScriptCodeGeneratorTest {
 
@@ -19,23 +19,12 @@ class TypeScriptCodeGeneratorTest {
 
     @Test
     fun testTypeUnionGeneration() {
-        val keys = setOf(
-            "common.yes",
-            "common.no",
-            "errors.notFound",
-            "errors.unauthorized"
-        )
-
         // 这里我们测试生成的内容应该包含类型定义
         val generated = TypeScriptCodeGenerator.generateTypeDefinitions(
             projectRoot = java.io.File("."),
             localesDir = "locales",
-            pathMatcher = "**/*.json",
-            keyStyle = com.hegg5577.i18n.locale.KeyStyle(
-                separator = ".",
-                uppercase = false,
-                camelCase = false
-            )
+            pathMatcher = "{locale}/{file}",
+            keyStyle = KeyStyle.NESTED
         )
 
         // 验证生成的文件包含必要的导出
@@ -48,12 +37,8 @@ class TypeScriptCodeGeneratorTest {
         val generated = TypeScriptCodeGenerator.generateStructuredSchema(
             projectRoot = java.io.File("."),
             localesDir = "locales",
-            pathMatcher = "**/*.json",
-            keyStyle = com.hegg5577.i18n.locale.KeyStyle(
-                separator = ".",
-                uppercase = false,
-                camelCase = false
-            )
+            pathMatcher = "{locale}/{file}",
+            keyStyle = KeyStyle.NESTED
         )
 
         assertTrue(generated.content.contains("export const I18nSchema"))
@@ -65,12 +50,8 @@ class TypeScriptCodeGeneratorTest {
         val generated = TypeScriptCodeGenerator.generateVueComponentTypes(
             projectRoot = java.io.File("."),
             localesDir = "locales",
-            pathMatcher = "**/*.json",
-            keyStyle = com.hegg5577.i18n.locale.KeyStyle(
-                separator = ".",
-                uppercase = false,
-                camelCase = false
-            )
+            pathMatcher = "{locale}/{file}",
+            keyStyle = KeyStyle.NESTED
         )
 
         assertTrue(generated.content.contains("import { computed, ref, Ref } from 'vue'"))

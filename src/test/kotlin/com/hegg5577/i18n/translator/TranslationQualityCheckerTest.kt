@@ -1,8 +1,9 @@
 package com.hegg5577.i18n.translator
 
-import org.junit.jupiter.api.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertTrue
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 class TranslationQualityCheckerTest {
 
@@ -97,7 +98,4 @@ class TranslationQualityCheckerTest {
         }
         assertNotNull(shortIssue)
     }
-
-    private fun assertFalse(condition: Boolean) = assertTrue(!condition)
-    private fun assertNotNull(obj: Any?) = assertTrue(obj != null)
 }

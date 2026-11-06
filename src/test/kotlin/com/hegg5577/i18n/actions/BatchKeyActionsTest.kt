@@ -3,6 +3,7 @@ package com.hegg5577.i18n.actions
 import com.hegg5577.i18n.locale.LocaleRepository
 import com.hegg5577.i18n.ui.I18nPanelService
 import com.hegg5577.i18n.ui.TranslationTablePanel
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.ui.TestDialogManager
@@ -23,7 +24,9 @@ class BatchKeyActionsTest : BasePlatformTestCase() {
     fun testFindTablePanelAcrossTabs() {
         val manager = ToolWindowManager.getInstance(project)
         val toolWindow = manager.getToolWindow("i18n-helper")
-            ?: manager.registerToolWindow(RegisterToolWindowTask.closable("i18n-helper", null))
+            ?: manager.registerToolWindow(
+                RegisterToolWindowTask.closable("i18n-helper", AllIcons.Toolwindows.ToolWindowStructure)
+            )
         val contents = toolWindow.contentManager
         contents.removeAllContents(true)
         val factory = ContentFactory.getInstance()
