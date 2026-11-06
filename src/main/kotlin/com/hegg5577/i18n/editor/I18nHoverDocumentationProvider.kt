@@ -130,21 +130,22 @@ class I18nHoverDocumentationProvider : DocumentationProvider, ExternalDocumentat
         sb.append("<html><body style='font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;'>")
 
         // 标题
-        sb.append("<div style='margin-bottom: 8px;'><b>i18n Key:</b> <code>${escapeHtml(key)}</code></div>")
+        sb.append("<div style='margin-bottom: 6px;'><b>i18n Key:</b> <code>${escapeHtml(key)}</code></div>")
 
-        // 翻译表格
-        sb.append("<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse;'>")
-        sb.append("<tr style='background-color: #f0f0f0;'>")
-        sb.append("<th style='text-align: left; padding: 4px 8px;'>Language</th>")
-        sb.append("<th style='text-align: left; padding: 4px 8px;'>Translation</th>")
+        // 翻译表格：不硬编码背景色 / 边框色，随主题自适应。
+        // 早期用 border='1' + 表头 #f0f0f0，深色主题下是刺眼的白条 + 粗黑框。
+        sb.append("<table style='border-collapse: collapse; width: 100%;'>")
+        sb.append("<tr>")
+        sb.append("<th style='text-align: left; padding: 3px 10px 3px 0; font-weight: bold;'>Language</th>")
+        sb.append("<th style='text-align: left; padding: 3px 10px; font-weight: bold;'>Translation</th>")
         sb.append("</tr>")
 
         for ((locale, value) in translations) {
             val displayLocale = Flags.displayName(locale)
-            val displayValue = if (value.isEmpty()) "<i style='color: #999;'>(empty)</i>" else escapeHtml(value)
-            sb.append("<tr>")
-            sb.append("<td style='padding: 4px 8px;'><b>$displayLocale</b></td>")
-            sb.append("<td style='padding: 4px 8px;'>$displayValue</td>")
+            val displayValue = if (value.isEmpty()) "<i style='opacity: 0.55;'>(empty)</i>" else escapeHtml(value)
+            sb.append("<tr style='border-top: 1px solid rgba(128, 128, 128, 0.25);'>")
+            sb.append("<td style='padding: 4px 10px 4px 0; white-space: nowrap;'>$displayLocale</td>")
+            sb.append("<td style='padding: 4px 10px;'>$displayValue</td>")
             sb.append("</tr>")
         }
 
@@ -152,7 +153,7 @@ class I18nHoverDocumentationProvider : DocumentationProvider, ExternalDocumentat
 
         // 链接：打开 Key 编辑对话框
         val encodedKey = java.net.URLEncoder.encode(key, "UTF-8")
-        sb.append("<div style='margin-top: 12px;'>")
+        sb.append("<div style='margin-top: 10px;'>")
         sb.append("<a href=\"i18n.edit?key=$encodedKey\">✎ Edit this key</a>")
         sb.append("</div>")
 
