@@ -31,6 +31,12 @@
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <!-- 错误与 UI 冻结上报：接入 JetBrains Marketplace 内置的 error handler。
+             不注册的话，用户遇到的异常/冻结不会被归因到本插件，
+             插件市场的 Exceptions / Freezes 标签页会一直显示「没有数据」。
+             该类自 IntelliJ Platform 2023.3 起可用，无需自定义实现。 -->
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
+
         <notificationGroup id="i18n.helper.notifications"
                            displayType="BALLOON"
                            isLogByDefault="true"/>
