@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.hegg5577.i18n"
-version = "0.1.3"
+version = "0.1.4"
 
 tasks.named<Zip>("buildPlugin") {
     archiveBaseName.set("i18n-tool-plus")
@@ -58,6 +58,12 @@ intellijPlatform {
             untilBuild = "263.*"
         }
         changeNotes = """
+            <h3>0.1.4</h3>
+            <ul>
+              <li>New plugin icon and tool-window icon.</li>
+              <li>Polished marketplace listing page.</li>
+              <li>Fix the hover translation table styling in dark themes.</li>
+            </ul>
             <h3>0.1.3</h3>
             <ul>
               <li>Support WebStorm 2026.3 and newer.</li>
