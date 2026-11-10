@@ -1,8 +1,7 @@
 package com.hegg5577.i18n.actions
 
 import com.hegg5577.i18n.generator.TypeScriptCodeGenerator
-import com.hegg5577.i18n.settings.I18nSettings
-import com.hegg5577.i18n.locale.KeyStyle
+import com.hegg5577.i18n.settings.I18nContext
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.Project
@@ -19,29 +18,33 @@ import java.io.File
  */
 class GenerateTypeDefinitionsAction : AnAction("Generate i18n Types") {
 
+    /** 生成器与编辑器使用同一仓库，包含全部目录和命名空间。 */
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
 
         try {
             val projectRoot = File(project.basePath ?: return)
-            val settings = I18nSettings.getInstance(project)
+            val context = I18nContext.of(project)
+            val repository = context.repository() ?: return
 
             // 生成主类型定义
             val typesDef = TypeScriptCodeGenerator.generateTypeDefinitions(
                 projectRoot,
-                settings.localesPath,
-                settings.state.pathMatcher,
-                com.hegg5577.i18n.locale.KeyStyle.NESTED,
+                context.localesPath,
+                context.pathMatcher,
+                context.keyStyle,
                 "src/types/i18n.ts",
+                repository = repository,
             )
 
             // 生成结构化 Schema
             val schemaDef = TypeScriptCodeGenerator.generateStructuredSchema(
                 projectRoot,
-                settings.localesPath,
-                settings.state.pathMatcher,
-                com.hegg5577.i18n.locale.KeyStyle.NESTED,
+                context.localesPath,
+                context.pathMatcher,
+                context.keyStyle,
                 "src/types/i18n-schema.ts",
+                repository = repository,
             )
 
             // 生成 Vue 3 类型（如果项目包含 Vue）
@@ -49,10 +52,11 @@ class GenerateTypeDefinitionsAction : AnAction("Generate i18n Types") {
                 File(projectRoot, "package.json").readText().contains("vue")) {
                 TypeScriptCodeGenerator.generateVueComponentTypes(
                     projectRoot,
-                    settings.localesPath,
-                    settings.state.pathMatcher,
-                    com.hegg5577.i18n.locale.KeyStyle.NESTED,
+                    context.localesPath,
+                    context.pathMatcher,
+                    context.keyStyle,
                     "src/types/i18n-vue.ts",
+                    repository = repository,
                 )
             } else {
                 null

@@ -68,9 +68,8 @@ class I18nHoverDocumentationProvider : DocumentationProvider, ExternalDocumentat
             val project = element.project
             val context = I18nContext.of(project)
 
-            // 获取光标位置的文本（通常是字符串或标识符）
-            val text = element.text
-            val key = extractKeyFromText(text) ?: return null
+            // 与跳转共用静态引用判断，防止普通字符串误用同名译文。
+            val key = I18nKeySupport.keyAt(element) ?: return null
 
             val projectRoot = project.basePath ?: return null
 
@@ -89,6 +88,7 @@ class I18nHoverDocumentationProvider : DocumentationProvider, ExternalDocumentat
                         localesDir = context.localesPath,
                         pathMatcher = context.pathMatcher,
                         keyStyle = context.keyStyle,
+                        repository = context.repository(),
                     )
                     allValues[locale] = values[key] ?: ""
                 } catch (e: ProcessCanceledException) {
@@ -106,21 +106,6 @@ class I18nHoverDocumentationProvider : DocumentationProvider, ExternalDocumentat
             throw e
         } catch (e: Exception) {
             return null
-        }
-    }
-
-    private fun extractKeyFromText(text: String): String? {
-        // 从 "key" 或 'key' 中提取 key
-        return when {
-            text.startsWith("\"") && text.endsWith("\"") && text.length > 2 ->
-                text.substring(1, text.length - 1)
-            text.startsWith("'") && text.endsWith("'") && text.length > 2 ->
-                text.substring(1, text.length - 1)
-            text.startsWith("`") && text.endsWith("`") && text.length > 2 ->
-                text.substring(1, text.length - 1)
-            // 也可能是标识符本身，不带引号
-            text.matches(Regex("""[\w.\-]+""")) -> text
-            else -> null
         }
     }
 

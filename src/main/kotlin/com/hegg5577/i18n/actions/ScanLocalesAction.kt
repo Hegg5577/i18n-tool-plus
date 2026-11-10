@@ -17,6 +17,7 @@ import java.io.File
  */
 class ScanLocalesAction : AnAction() {
 
+    /** 配置与归属冲突通过对话框报告，避免扫描动作直接抛出异常。 */
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
         val root = project.basePath?.let(::File)
@@ -28,12 +29,17 @@ class ScanLocalesAction : AnAction() {
 
         val context = com.hegg5577.i18n.settings.I18nContext.of(project)
         val repository = context.repository() ?: return
-        val report = repository.buildReport(context.sourceLocale)
+        val report = try {
+            repository.buildReport(context.sourceLocale)
+        } catch (e: IllegalStateException) {
+            Messages.showErrorDialog(project, e.message ?: "语言包归属冲突", "i18n 配置错误")
+            return
+        }
 
         if (report.isEmpty) {
             notify(
                 project,
-                "未找到语言包。当前配置：路径 ${context.localesPath} + 模式 ${context.pathMatcher}",
+                "未找到语言包。当前配置：路径 ${context.localesPaths.ifEmpty { listOf(context.localesPath) }.joinToString()} + 模式 ${context.pathMatcher}",
                 NotificationType.WARNING,
             )
             return

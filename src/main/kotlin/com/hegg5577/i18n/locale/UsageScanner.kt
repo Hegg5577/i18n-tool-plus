@@ -38,7 +38,7 @@ object UsageScanner {
      * 扫描项目源码，找出所有被引用的 i18n key。
      *
      * @param projectRoot 项目根目录
-     * @param sourceDirs 源码目录（相对项目根），为空时用[DEFAULT_SOURCE_DIRS]
+     * @param sourceDirs 源码目录（支持相对项目根或绝对路径），为空时用[DEFAULT_SOURCE_DIRS]
      * @param extensions 参与扫描的文件后缀
      * @param customPatterns 用户配置的正则；为空时用内置规则
      * @return key -> 使用位置；按 key 字典序输出，便于稳定展示
@@ -48,6 +48,7 @@ object UsageScanner {
         sourceDirs: List<String> = DEFAULT_SOURCE_DIRS,
         extensions: Set<String> = emptySet(),
         customPatterns: List<String> = emptyList(),
+        keyPattern: String = KeyUsageScanner.DEFAULT_KEY_PATTERN,
     ): Map<String, Usage> {
         if (!projectRoot.isDirectory) return emptyMap()
 
@@ -56,10 +57,11 @@ object UsageScanner {
         val allowedExt = extensions.ifEmpty { TranslationIndex.DEFAULT_EXTENSIONS }
 
         for (dir in sourceDirs.ifEmpty { DEFAULT_SOURCE_DIRS }) {
-            walkFiles(File(projectRoot, dir), allowedExt) { file, relativePath ->
+            val source = File(dir).let { if (it.isAbsolute) it else File(projectRoot, dir) }
+            walkFiles(source, allowedExt) { file, relativePath ->
                 if (file.length() > MAX_FILE_LENGTH) return@walkFiles
                 val text = runCatching { file.readText() }.getOrNull() ?: return@walkFiles
-                for (usage in KeyUsageScanner.scan(text, customPatterns, DefaultPatterns.ALL)) {
+                for (usage in KeyUsageScanner.scan(text, customPatterns, DefaultPatterns.ALL, keyPattern)) {
                     found.getOrPut(usage.key) { LinkedHashSet() }.add(relativePath)
                 }
             }
@@ -84,9 +86,11 @@ object UsageScanner {
         sourceDirs: List<String> = DEFAULT_SOURCE_DIRS,
         extensions: Set<String> = emptySet(),
         customPatterns: List<String> = emptyList(),
+        keyPattern: String = KeyUsageScanner.DEFAULT_KEY_PATTERN,
+        repository: LocaleRepository? = null,
     ): UsageReport {
-        val usages = scan(projectRoot, sourceDirs, extensions, customPatterns)
-        val repo = LocaleRepository(projectRoot, localesDir, pathMatcher, keyStyle)
+        val usages = scan(projectRoot, sourceDirs, extensions, customPatterns, keyPattern)
+        val repo = repository ?: LocaleRepository(projectRoot, localesDir, pathMatcher, keyStyle)
         val defined = repo.scanLocales()
             .flatMap { it.keys }
             .toSortedSet()

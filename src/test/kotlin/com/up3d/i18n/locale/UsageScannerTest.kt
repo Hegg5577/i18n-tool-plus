@@ -51,6 +51,14 @@ class UsageScannerTest {
         assertFalse("构建产物里的 key 不该被计入", usages.containsKey("dist.key"))
     }
 
+    /** 设置允许绝对源码目录时，使用检测必须与重命名扫描范围一致。 */
+    @Test
+    fun `绝对源码目录能找到引用`() {
+        val source = File(temp.root, "src")
+        write(File(source, "a.js").path, "t('common.ok');")
+        assertEquals(setOf("common.ok"), UsageScanner.scan(temp.root, listOf(source.absolutePath)).keys)
+    }
+
     @Test
     fun `按扩展名过滤`() {
         write(File(temp.root, "src/a.jsx").path, """t('jsx.key');""")

@@ -1,7 +1,5 @@
 package com.hegg5577.i18n.locale
 
-import com.google.gson.JsonObject
-import com.google.gson.JsonParser
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -39,7 +37,7 @@ object TranslationIndex {
 
     /**
      * 返回某项目的译文映射，key 为点号路径（如 `common.cancel`）。
-     * 解析失败或语言包不存在时返回空表，调用方据此静默跳过提示。
+     * 语言包不存在时返回空表，归属冲突时抛出包含文件路径的异常，由调用方展示或跳过提示。
      *
      * @param locale 行内提示使用的语言
      * @param fallbackLocale 首选语言缺 key 时回退到的语言；传空串表示不回退
@@ -51,13 +49,15 @@ object TranslationIndex {
         localesDir: String = LocaleRepository.DEFAULT_LOCALES_DIR,
         pathMatcher: String = PathMatcher.DEFAULT_PATTERN,
         keyStyle: KeyStyle = KeyStyle.NESTED,
+        repository: LocaleRepository? = null,
     ): Map<String, String> {
         if (projectRoot == null) return emptyMap()
 
-        val cacheKey = "$projectRoot|$localesDir|$pathMatcher"
-        val resolved = PathMatcher(pathMatcher).resolve(File(projectRoot, localesDir))
+        val repo = repository ?: LocaleRepository(File(projectRoot), localesDir, pathMatcher, keyStyle)
+        val resolved = repo.resolvedFiles()
+        val cacheKey = "$projectRoot|${repo.configurationKey}"
         val fingerprint = buildString {
-            append(locale).append('|').append(fallbackLocale).append('|').append(keyStyle).append('|')
+            append(locale).append('|').append(fallbackLocale).append('|').append(repo.keyStyle).append('|')
             for (l in listOf(locale, fallbackLocale).filter { it.isNotBlank() }) {
                 append(l).append('|')
                 for (file in resolved.filter { it.locale == l }.map { it.file }) {
@@ -74,9 +74,9 @@ object TranslationIndex {
         val values = LinkedHashMap<String, String>()
         // 先放回退语言，再用首选语言覆盖：未翻译的 key 自动显示回退语言原文
         if (fallbackLocale.isNotBlank() && fallbackLocale != locale) {
-            values.putAll(load(projectRoot, fallbackLocale, localesDir, pathMatcher, keyStyle))
+            values.putAll(repo.valuesOf(fallbackLocale))
         }
-        values.putAll(load(projectRoot, locale, localesDir, pathMatcher, keyStyle))
+        values.putAll(repo.valuesOf(locale))
 
         cache[cacheKey] = Entry(fingerprint, values)
         return values
@@ -92,7 +92,8 @@ object TranslationIndex {
         localesDir: String = LocaleRepository.DEFAULT_LOCALES_DIR,
         pathMatcher: String = PathMatcher.DEFAULT_PATTERN,
         keyStyle: KeyStyle = KeyStyle.NESTED,
-    ): Int = load(projectRoot, locale, localesDir, pathMatcher, keyStyle).size
+        repository: LocaleRepository? = null,
+    ): Int = (repository ?: LocaleRepository(File(projectRoot), localesDir, pathMatcher, keyStyle)).valuesOf(locale).size
 
     /** 某语言的语言包文件路径，遵循配置的路径模式。 */
     fun localeFile(
@@ -107,45 +108,4 @@ object TranslationIndex {
             ?.file
             ?: File(File(projectRoot, localesDir), "$locale/${LocaleRepository.DEFAULT_FILE_NAME}")
 
-    private fun load(
-        projectRoot: String,
-        locale: String,
-        localesDir: String,
-        pathMatcher: String,
-        keyStyle: KeyStyle,
-    ): Map<String, String> {
-        if (locale.isBlank()) return emptyMap()
-        val root = File(projectRoot)
-        val repo = LocaleRepository(
-            projectRoot = root,
-            localesDir = localesDir,
-            pathMatcher = pathMatcher,
-            keyStyle = keyStyle,
-        )
-        // 复用仓库的解析逻辑，保证面板与行内提示对 key 的理解完全一致
-        return repo.valuesOf(locale)
-    }
-
-    /** 将嵌套 JSON 展平为点号 key 到字符串值的映射。 */
-    private fun flatten(file: File): Map<String, String> {
-        if (!file.isFile) return emptyMap()
-        // 平台自带 gson；万一不可用也只会导致不显示提示，不会让 IDE 报错中断
-        return runCatching {
-            val root = JsonParser.parseString(file.readText()).asJsonObject
-            val out = LinkedHashMap<String, String>()
-
-            fun walk(obj: JsonObject, prefix: String) {
-                for ((name, value) in obj.entrySet()) {
-                    val key = if (prefix.isEmpty()) name else "$prefix.$name"
-                    when {
-                        value.isJsonObject -> walk(value.asJsonObject, key)
-                        value.isJsonPrimitive -> out[key] = value.asString
-                    }
-                }
-            }
-
-            walk(root, "")
-            out
-        }.getOrDefault(emptyMap())
-    }
 }

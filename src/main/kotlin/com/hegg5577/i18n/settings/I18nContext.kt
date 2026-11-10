@@ -33,12 +33,29 @@ data class I18nContext(
     val openaiApiKey: String,
     val openaiModel: String,
     val openaiBaseUrl: String,
+    val googleApiKey: String,
+    val googleApiUrl: String,
+    val deeplApiUrl: String,
+    val baiduAppId: String,
+    val baiduApiSecret: String,
+    val baiduApiUrl: String,
+    val libreTranslateApiUrl: String,
+    val libreTranslateApiKey: String,
+    val ollamaBaseUrl: String,
+    val ollamaModel: String,
+    val localesPaths: List<String> = emptyList(),
+    val namespaceEnabled: Boolean = false,
+    val namespaceDelimiter: String = ":",
 ) {
     /** 行内提示实际使用的语言：优先配置项，其次首选显示语言，最后源语言。 */
     val effectiveAnnotationLocale: String
         get() = annotationLocale.ifBlank {
             displayLocales.firstOrNull() ?: sourceLocale
         }
+
+    /** 所有编辑器入口共用实际配置的分隔符，兼容自定义符号。 */
+    val keyPattern: String
+        get() = com.hegg5577.i18n.editor.KeyUsageScanner.keyPattern(if (namespaceEnabled) namespaceDelimiter else "")
 
     /** 是否为可用的上下文（项目根存在）。 */
     val isValid: Boolean get() = projectRoot != null && projectRoot.isDirectory
@@ -54,6 +71,9 @@ data class I18nContext(
             localesDir = localesPath,
             pathMatcher = pathMatcher,
             keyStyle = keyStyle,
+            localesDirs = localesPaths,
+            namespaceEnabled = namespaceEnabled,
+            namespaceDelimiter = namespaceDelimiter,
         )
     }
 
@@ -84,6 +104,19 @@ data class I18nContext(
                 openaiApiKey = state.openaiApiKey,
                 openaiModel = state.openaiModel,
                 openaiBaseUrl = state.openaiBaseUrl,
+                googleApiKey = state.googleApiKey,
+                googleApiUrl = state.googleApiUrl,
+                deeplApiUrl = state.deeplApiUrl,
+                baiduAppId = state.baiduAppId,
+                baiduApiSecret = state.baiduApiSecret,
+                baiduApiUrl = state.baiduApiUrl,
+                libreTranslateApiUrl = state.libreTranslateApiUrl,
+                libreTranslateApiKey = state.libreTranslateApiKey,
+                ollamaBaseUrl = state.ollamaBaseUrl,
+                ollamaModel = state.ollamaModel,
+                localesPaths = state.localesPaths.map { it.trim() }.filter { it.isNotEmpty() }.distinct(),
+                namespaceEnabled = state.namespaceEnabled,
+                namespaceDelimiter = state.namespaceDelimiter.ifBlank { ":" },
             )
         }
     }

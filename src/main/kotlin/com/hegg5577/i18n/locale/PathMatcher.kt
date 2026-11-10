@@ -110,4 +110,4 @@ class PathMatcher(
 }
 
 /** namespace 仅由显式 {namespace} 提取，默认值兼容旧构造调用。 */
-data class ResolvedLocale(val locale: String, val file: File, val namespace: String? = null)
+data class ResolvedLocale(val locale: String, val file: File, val namespace: String? = null, val root: File? = null)

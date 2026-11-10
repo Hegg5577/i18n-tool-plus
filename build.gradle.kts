@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.hegg5577.i18n"
-version = "0.1.4"
+version = "0.1.5"
 
 tasks.named<Zip>("buildPlugin") {
     archiveBaseName.set("i18n-tool-plus")
@@ -29,6 +29,7 @@ dependencies {
         } else {
             local(localPlatformPath)
         }
+        bundledPlugin("com.intellij.modules.json")
         testFramework(TestFrameworkType.Platform)
     }
     // 平台自带 gson（lib/intellij.libraries.gson.jar），编译期引用即可，
@@ -58,6 +59,11 @@ intellijPlatform {
             untilBuild = "263.*"
         }
         changeNotes = """
+            <h3>0.1.5</h3>
+            <ul>
+              <li>Wait for translation files to finish writing before reporting success.</li>
+              <li>Report rejected or failed saves and preserve edited translations for retry.</li>
+            </ul>
             <h3>0.1.4</h3>
             <ul>
               <li>New plugin icon and tool-window icon.</li>

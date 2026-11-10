@@ -25,10 +25,10 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * 批量翻译：把配置的源语言里已有、目标语言里缺失的 key 自动补齐。
+ * 批量翻译：默认补齐缺失或空白译文，按配置允许重新翻译已有内容。
  *
  * 设计上刻意保守，因为这一步会**改写磁盘上的语言包**：
- * - 默认只补缺失 key，**绝不覆盖已存在的人工译文**；
+ * - 默认只补缺失或空白译文，开启覆盖时在确认弹窗中明确提示；
  * - 先出预览让用户确认，再真正联网；
  * - 单条失败不影响其它条目，且不会写入半成品；
  * - 通过 IDE 的 Document 写入，**Ctrl+Z 可整体撤销**。
@@ -54,23 +54,34 @@ class BatchTranslateAction : AnAction() {
 
         val context = com.hegg5577.i18n.settings.I18nContext.of(project)
         val repository = context.repository() ?: return
-        val report = repository.buildReport(context.sourceLocale)
+        val report = try {
+            repository.buildReport(context.sourceLocale)
+        } catch (e: IllegalStateException) {
+            Messages.showErrorDialog(project, e.message ?: "语言包归属冲突", "i18n 配置错误")
+            return
+        }
         if (report.isEmpty) {
             notify(
                 project,
-                "未找到语言包。当前配置：路径 ${context.localesPath} + 模式 ${context.pathMatcher}",
+                "未找到语言包。当前配置：路径 ${context.localesPaths.ifEmpty { listOf(context.localesPath) }.joinToString()} + 模式 ${context.pathMatcher}",
                 NotificationType.WARNING,
             )
             return
         }
 
+        if (report.locales.none { it.locale == context.sourceLocale }) {
+            notify(project, "未找到源语言 ${context.sourceLocale} 的语言包，请检查源语言设置。", NotificationType.WARNING)
+            return
+        }
         val sourceValues = repository.valuesOf(context.sourceLocale)
-        val units = buildUnits(report.missing, sourceValues)
+        val targetValues = report.locales.filter { it.locale != context.sourceLocale }
+            .associate { it.locale to repository.valuesOf(it.locale) }
+        val units = buildUnits(sourceValues, targetValues, context.overrideExisting)
 
         if (units.isEmpty()) {
             Messages.showInfoMessage(
                 project,
-                "所有语言的 key 都已齐全，没有需要翻译的条目。",
+                "没有需要翻译的条目，请检查目标语言包、源文是否非空以及覆盖设置。",
                 TITLE,
             )
             return
@@ -79,7 +90,7 @@ class BatchTranslateAction : AnAction() {
         val engine = TranslationEngineManager.getInstance(project).getActiveEngine()
         val answer = Messages.showYesNoDialog(
             project,
-            buildPreview(units, context.sourceLocale, engine),
+            buildPreview(units, context.sourceLocale, engine, context.overrideExisting),
             TITLE,
             "开始翻译",
             "取消",
@@ -87,20 +98,21 @@ class BatchTranslateAction : AnAction() {
         )
         if (answer != Messages.YES) return
 
-        runTranslation(project, repository, units, context.sourceLocale, engine)
+        runTranslation(project, repository, units, context.sourceLocale, engine, context.overrideExisting)
     }
 
-    /** 把「各语言缺失 key」压平成去重后的翻译单元。 */
-    private fun buildUnits(
-        missing: Map<String, List<String>>,
+    /** 按覆盖策略筛选缺失、空白或已有译文，同一目标语言的相同原文只请求一次。 */
+    internal fun buildUnits(
         sourceValues: Map<String, String>,
+        targetValues: Map<String, Map<String, String>>,
+        overrideExisting: Boolean = false,
     ): List<TranslateUnit> {
         val units = ArrayList<TranslateUnit>()
 
-        for ((locale, keys) in missing) {
+        for ((locale, values) in targetValues) {
             val byText = LinkedHashMap<String, MutableList<String>>()
-            for (key in keys) {
-                val text = sourceValues[key]?.takeIf { it.isNotBlank() } ?: continue
+            for ((key, text) in sourceValues) {
+                if (text.isBlank() || (!overrideExisting && !values[key].isNullOrBlank())) continue
                 byText.getOrPut(text) { ArrayList() } += key
             }
             for ((text, groupedKeys) in byText) {
@@ -110,8 +122,13 @@ class BatchTranslateAction : AnAction() {
         return units
     }
 
-    /** 展示缺失项及本次实际使用的引擎，让预览与请求保持一致。 */
-    internal fun buildPreview(units: List<TranslateUnit>, sourceLocale: String, engine: TranslationEngine): String {
+    /** 展示待翻译数量、覆盖策略与实际引擎，避免确认后才发现人工译文会被替换。 */
+    internal fun buildPreview(
+        units: List<TranslateUnit>,
+        sourceLocale: String,
+        engine: TranslationEngine,
+        overrideExisting: Boolean = false,
+    ): String {
         val perLocale = LinkedHashMap<String, Int>()
         var totalKeys = 0
         for (unit in units) {
@@ -126,8 +143,12 @@ class BatchTranslateAction : AnAction() {
                 appendLine("  $locale　$count 条")
             }
             appendLine()
-            appendLine("共 $totalKeys 条缺失 key，去重合并为 ${units.size} 次翻译请求。")
-            appendLine("只补全缺失项，不会改动任何已有译文。")
+            appendLine("共 $totalKeys 条待翻译 Key，去重合并为 ${units.size} 次翻译请求。")
+            appendLine(if (overrideExisting) {
+                "已开启覆盖：将重新翻译并替换已有译文（包括人工译文）。"
+            } else {
+                "只补全缺失或空白译文，保留已有的非空译文。"
+            })
             appendLine()
             appendLine("预览：")
             for (unit in units.take(3)) {
@@ -147,6 +168,7 @@ class BatchTranslateAction : AnAction() {
         units: List<TranslateUnit>,
         sourceLocale: String,
         engine: TranslationEngine,
+        overrideExisting: Boolean,
     ) {
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "i18n: 批量翻译语言包", true) {
@@ -190,7 +212,7 @@ class BatchTranslateAction : AnAction() {
                     indicator.text = "正在写入语言包…"
                     indicator.isIndeterminate = true
 
-                    val result = writeBack(project, repository, sourceLocale, byLocale)
+                    val result = writeBack(project, repository, sourceLocale, byLocale, overrideExisting)
                     failures += result.failed.map { (locale, reason) -> "$locale 保存失败：$reason" }
 
                     ApplicationManager.getApplication().invokeAndWait {
@@ -210,29 +232,23 @@ class BatchTranslateAction : AnAction() {
         val protected = PlaceholderProtector.protect(unit.sourceText)
         val raw = engine.translate(listOf(protected.text), unit.locale, sourceLocale).singleOrNull()
             ?: throw TranslationException("翻译引擎未返回 ${unit.locale} 的单条译文")
+        if (raw.isBlank()) throw TranslationException("翻译引擎返回空白译文，已丢弃该条")
         return protected.restore(raw)
             ?: throw TranslationException("占位符在翻译后丢失，为保证质量已丢弃该条")
     }
 
-    /** 保存前重新检查缺失项，避免覆盖翻译等待期间补入的人工译文。 */
-    private fun writeBack(
+    /** 将本次确认的覆盖策略传给文档保存入口，默认保留等待期间新增的人工译文。 */
+    internal fun writeBack(
         project: Project,
         repository: LocaleRepository,
         sourceLocale: String,
         byLocale: Map<String, Map<String, String>>,
-    ): TranslationSaver.Result {
-        val edits = missingEdits(repository, byLocale)
-        return TranslationSaver.save(project, repository, sourceLocale, edits, onlyMissing = true)
-    }
-
-    /** 已存在的 key 即使值为空也保留，批量操作只补真正缺失的项。 */
-    internal fun missingEdits(
-        repository: LocaleRepository,
-        byLocale: Map<String, Map<String, String>>,
-    ): Map<String, Map<String, String>> = byLocale.mapValues { (locale, values) ->
-        val existing = repository.valuesOf(locale)
-        values.filterKeys { it !in existing }
-    }.filterValues { it.isNotEmpty() }
+        overrideExisting: Boolean,
+    ): TranslationSaver.Result = TranslationSaver.save(
+        project, repository, sourceLocale, byLocale,
+        onlyMissing = !overrideExisting,
+        fillEmpty = !overrideExisting,
+    )
 
     private fun notifyResult(project: Project, written: List<String>, failures: List<String>) {
         val message = buildString {

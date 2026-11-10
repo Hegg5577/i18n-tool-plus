@@ -88,7 +88,7 @@ class MultiFileLocaleTest {
         expectFailure("namespace「page」") { repository().localeFile("ja", "title", "en") }
     }
 
-    /** 重复 key 只能读取合并，写入时必须拒绝歧义。 */
+    /** 重复 Key 在写入前必须拒绝歧义。 */
     @Test
     fun `目标key重复时拒绝写入`() {
         write("zh/common.json", """{"title":"甲"}""")

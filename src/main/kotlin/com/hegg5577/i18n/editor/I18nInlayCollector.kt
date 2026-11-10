@@ -20,6 +20,7 @@ import com.hegg5577.i18n.settings.I18nContext
  */
 class I18nInlayCollector : OwnBypassCollector {
 
+    /** 配置冲突由面板报告，收集器跳过提示以免打断源码编辑。 */
     override fun collectHintsForFile(file: PsiFile, sink: InlayTreeSink) {
         val context = I18nContext.of(file.project)
         if (!context.inlineAnnotationEnabled) return
@@ -28,14 +29,19 @@ class I18nInlayCollector : OwnBypassCollector {
 
         val annotationLocale = context.effectiveAnnotationLocale
         val fallback = if (context.fallbackToSource) context.sourceLocale else ""
-        val values = TranslationIndex.values(
-            projectRoot = context.projectRoot?.path,
-            locale = annotationLocale,
-            fallbackLocale = fallback,
-            localesDir = context.localesPath,
-            pathMatcher = context.pathMatcher,
-            keyStyle = context.keyStyle,
-        )
+        val values = try {
+            TranslationIndex.values(
+                projectRoot = context.projectRoot?.path,
+                locale = annotationLocale,
+                fallbackLocale = fallback,
+                localesDir = context.localesPath,
+                pathMatcher = context.pathMatcher,
+                keyStyle = context.keyStyle,
+                repository = context.repository(),
+            )
+        } catch (_: IllegalStateException) {
+            return
+        }
         if (values.isEmpty()) return
 
         val text = file.text
@@ -44,7 +50,7 @@ class I18nInlayCollector : OwnBypassCollector {
         // 用户配了自定义正则就只用它，避免内置规则混进来产生误命中
         val builtin = if (context.usageMatchRegex.isEmpty()) DefaultPatterns.ALL else emptyList()
 
-        for (usage in KeyUsageScanner.scan(text, context.usageMatchRegex, builtin)) {
+        for (usage in KeyUsageScanner.scan(text, context.usageMatchRegex, builtin, context.keyPattern)) {
             // 只给语言包里确实存在的 key 显示，天然过滤掉同名但非 i18n 的调用
             val translated = values[usage.key] ?: continue
 
@@ -77,16 +83,16 @@ class I18nInlayCollector : OwnBypassCollector {
 object DefaultPatterns {
     val ALL: List<Regex> = listOf(
         // t('key')  —— 裸函数调用
-        Regex("""\bt\s*\(\s*['"](?<key>[\w.\-]+)['"]"""),
+        Regex("""\bt\s*\(\s*['"`](?<key>[\w.\-]+)['"`]"""),
         // i18n.t('key') / i18next.t('key') / I18n.t('key')
-        Regex("""\b(?:i18n|i18next|I18n)\s*\.\s*t\s*\(\s*['"](?<key>[\w.\-]+)['"]"""),
+        Regex("""\b(?:i18n|i18next|I18n)\s*\.\s*t\s*\(\s*['"`](?<key>[\w.\-]+)['"`]"""),
         // $t('key') / $tc('key') —— Vue 组件内写法
-        Regex("""\$(?:t|tc)\s*\(\s*['"](?<key>[\w.\-]+)['"]"""),
+        Regex("""\$(?:t|tc)\s*\(\s*['"`](?<key>[\w.\-]+)['"`]"""),
         // this.$t('key') —— Options API 写法
-        Regex("""this\s*\.\s*\$(?:t|tc)\s*\(\s*['"](?<key>[\w.\-]+)['"]"""),
+        Regex("""this\s*\.\s*\$(?:t|tc)\s*\(\s*['"`](?<key>[\w.\-]+)['"`]"""),
         // translate('key') / transl('key') / gettext('key') —— i18n-js 等
-        Regex("""\b(?:translate|transl|gettext)\s*\(\s*['"](?<key>[\w.\-]+)['"]"""),
+        Regex("""\b(?:translate|transl|gettext)\s*\(\s*['"`](?<key>[\w.\-]+)['"`]"""),
         // translate('key', {...}) —— 带命名空间参数的写法
-        Regex("""\b(?:translate|transl)\s*\(\s*['"](?<key>[\w.\-]+)['"]\s*,"""),
+        Regex("""\b(?:translate|transl)\s*\(\s*['"`](?<key>[\w.\-]+)['"`]\s*,"""),
     )
 }

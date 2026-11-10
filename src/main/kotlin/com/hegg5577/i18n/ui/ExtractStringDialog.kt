@@ -28,7 +28,11 @@ class ExtractStringDialog(
     private val sourceLocale: String,
 ) : DialogWrapper(project, true) {
 
-    private val keyNameField = JBTextField(30).apply { text = suggestKeyName(sourceString) }
+    private val keyNameField = JBTextField(30).apply {
+        val namespaces = repo.resolvedFiles().filter { it.locale == sourceLocale }.mapNotNull { it.namespace }.distinct()
+        text = if (repo.namespaceEnabled && namespaces.size == 1)
+            "${namespaces.single()}${repo.namespaceDelimiter}${suggestKeyName(sourceString)}" else suggestKeyName(sourceString)
+    }
     private val locales = repo.scanLocales().map { it.locale }.sorted()
     private val translationFields = mutableMapOf<String, JBTextField>()
 
@@ -70,15 +74,23 @@ class ExtractStringDialog(
         return root
     }
 
+    /** 使用项目的分隔符规则，允许明确指定新 Key 的命名空间。 */
     override fun doValidate(): ValidationInfo? {
         val key = keyNameField.text.trim()
         if (key.isEmpty()) {
             return ValidationInfo("Key 名称不能为空", keyNameField)
         }
-        if (!key.matches(Regex("""[\w.\-]+"""))) {
-            return ValidationInfo("Key 名称只能包含字母、数字、下划线、点号和短横线", keyNameField)
+        if (!com.hegg5577.i18n.editor.I18nKeySupport.isValidKey(key, com.hegg5577.i18n.settings.I18nContext.of(project).keyPattern)) {
+            return ValidationInfo("Key 名称含有不支持的字符，请使用已配置的命名空间分隔符", keyNameField)
         }
 
+        try {
+            if (repo.localeFile(sourceLocale, key, sourceLocale) == null) {
+                return ValidationInfo("无法定位源语言文件，请明确命名空间和语言包目录", keyNameField)
+            }
+        } catch (e: IllegalStateException) {
+            return ValidationInfo(e.message ?: "语言包归属不明确", keyNameField)
+        }
         val sourceValue = translationFields[sourceLocale]?.text?.trim()
         if (sourceValue.isNullOrEmpty()) {
             return ValidationInfo("源语言（${Flags.displayName(sourceLocale)}）不能为空", translationFields[sourceLocale])

@@ -34,6 +34,7 @@ class I18nConfigurable(private val project: Project) : Configurable {
     private val state get() = I18nSettings.getInstance(project).state
 
     private val localesPathField = JBTextField()
+    private val localesPathsArea = JBTextArea(3, 35)
     private val sourceLocaleField = JBTextField()
     private val annotationLocaleField = JBTextField()
     private val displayLocalesField = JBTextField()
@@ -80,6 +81,7 @@ class I18nConfigurable(private val project: Project) : Configurable {
         // 基础配置选项卡
         val basicForm = FormBuilder.createFormBuilder()
             .addLabeledComponent(JBLabel("语言包根目录"), localesPathField, 1, false)
+            .addLabeledComponent(JBLabel("多个语言包目录（每行一个，留空使用上方目录）"), JBScrollPane(localesPathsArea), 1, false)
             .addLabeledComponent(JBLabel("路径模式"), matcherCombo, 1, false)
             .addComponent(
                 JPanel().apply {
@@ -130,6 +132,7 @@ class I18nConfigurable(private val project: Project) : Configurable {
     /** 把配置载入界面。 */
     override fun reset() {
         localesPathField.text = state.localesPath
+        localesPathsArea.text = state.localesPaths.joinToString("\n")
         matcherCombo.selectedItem = state.pathMatcher
         sourceLocaleField.text = state.sourceLocale
         annotationLocaleField.text = state.annotationLocale
@@ -148,7 +151,13 @@ class I18nConfigurable(private val project: Project) : Configurable {
 
     /** 把界面写回配置，并刷新受影响的缓存与面板。 */
     override fun apply() {
+        val delimiter = namespaceDelimiterField.text.trim().ifEmpty { ":" }
+        if (namespaceEnabled.isSelected && (delimiter.any { it.isWhitespace() || it in "\"'`\\" } ||
+                !(matcherCombo.selectedItem as? String).orEmpty().contains("{namespace}"))) {
+            throw com.intellij.openapi.options.ConfigurationException("启用命名空间需要在路径模式中包含 {namespace}，分隔符不能包含空白、引号或反斜杠")
+        }
         state.localesPath = localesPathField.text.trim()
+        state.localesPaths = localePaths().toMutableList()
         state.pathMatcher = (matcherCombo.selectedItem as? String ?: "").trim()
         state.sourceLocale = sourceLocaleField.text.trim()
         state.annotationLocale = annotationLocaleField.text.trim()
@@ -167,20 +176,26 @@ class I18nConfigurable(private val project: Project) : Configurable {
         state.overrideExisting = overrideExisting.isSelected
         state.usageMatchRegex = regexLines().toMutableList()
         translationEnginePanel.apply()
+        // YAML 声明的项目配置优先，应用设置后也要保持相同规则并回显实际生效值。
+        I18nSettings.getInstance(project).applyYamlOverrides()
+        reset()
 
         // 配置变了，缓存必须失效，否则面板与行内提示还显示旧数据
         project.getService(com.hegg5577.i18n.ui.I18nPanelService::class.java).refresh()
     }
 
+    /** 比较所有可编辑项，确保仅修改源码目录时也能应用设置。 */
     override fun isModified(): Boolean {
         val s = state
         return localesPathField.text.trim() != s.localesPath ||
+            localePaths() != s.localesPaths ||
             (matcherCombo.selectedItem as? String ?: "").trim() != s.pathMatcher ||
             sourceLocaleField.text.trim() != s.sourceLocale ||
             annotationLocaleField.text.trim() != s.annotationLocale ||
             splitList(displayLocalesField.text) != s.displayLocales ||
             (keyStyleCombo.selectedItem as? String) != s.keyStyle ||
             splitList(extensionsField.text).map { it.removePrefix(".") } != s.supportedExtensions ||
+            splitList(sourceDirsField.text).ifEmpty { listOf("src") } != s.sourceDirs ||
             namespaceEnabled.isSelected != s.namespaceEnabled ||
             namespaceDelimiterField.text.trim().ifEmpty { ":" } != s.namespaceDelimiter ||
             inlineEnabled.isSelected != s.inlineAnnotationEnabled ||
@@ -197,6 +212,10 @@ class I18nConfigurable(private val project: Project) : Configurable {
     /** 逗号分隔字符串 -> 列表，兼容中英文逗号并去空白。 */
     private fun splitList(text: String): List<String> =
         text.split(',', '，').map { it.trim() }.filter { it.isNotEmpty() }
+
+    /** 每行一个目录，保留含空格的路径并消除重复配置。 */
+    private fun localePaths(): List<String> =
+        localesPathsArea.text.lines().map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 
     /** 正则文本框 -> 非空行列表。 */
     private fun regexLines(): List<String> =

@@ -47,6 +47,26 @@ class BatchKeyActionsTest : BasePlatformTestCase() {
         }
     }
 
+    /** 前缀替换后的完整 Key 必须校验，拒绝会破坏源码字符串的内容。 */
+    fun testRenameRejectsInvalidGeneratedKey() {
+        val root = Files.createTempDirectory("i18n-invalid-rename").toFile()
+        try {
+            val file = File(root, "locales/en.json")
+            file.parentFile.mkdirs()
+            file.writeText("""{"old":"Hello"}""")
+            val action = BatchRenameKeysAction()
+            val method = action.javaClass.getDeclaredMethod("renameWithReferences", Project::class.java,
+                LocaleRepository::class.java, String::class.java, String::class.java).apply { isAccessible = true }
+            val result = method.invoke(action, project, LocaleRepository(root, "locales", "{locale}.json"),
+                "old", "bad'key") as com.hegg5577.i18n.locale.TranslationSaver.Result
+            assertFalse(result.isSuccess)
+            assertTrue(result.failed.isNotEmpty())
+            assertEquals("""{"old":"Hello"}""", file.readText())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
     /** 单项重命名无需伪造事件，也应在保存后通知服务；其他未保存文档保持原状。 */
     fun testRenameRefreshesServiceAfterSaving() {
         val root = Files.createTempDirectory("i18n-batch-actions").toFile()

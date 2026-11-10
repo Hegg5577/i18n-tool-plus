@@ -85,6 +85,19 @@ class I18nPanelService(private val project: Project) {
     /** 聚合每种语言的全部文件，并去重展示语言列表。 */
     private fun load(): Snapshot {
         val context = I18nContext.of(project)
+        return try {
+            loadConfigured()
+        } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {
+            throw e
+        } catch (e: Exception) {
+            Snapshot(emptyList(), context.sourceLocale, context.displayLocales, emptyMap(),
+                warning = e.message ?: "语言包读取失败")
+        }
+    }
+
+    /** 按统一仓库配置加载面板，冲突交由外层显示错误。 */
+    private fun loadConfigured(): Snapshot {
+        val context = I18nContext.of(project)
         if (!context.isValid) {
             return Snapshot(
                 emptyList(), context.sourceLocale, context.displayLocales, emptyMap(),
@@ -100,7 +113,7 @@ class I18nPanelService(private val project: Project) {
 
         val all = repo.scanLocales()
         if (all.isEmpty()) {
-            val warning = "未找到语言包。当前配置：路径 ${context.localesPath} + 模式 ${context.pathMatcher}"
+            val warning = "未找到语言包。当前配置：路径 ${context.localesPaths.ifEmpty { listOf(context.localesPath) }.joinToString()} + 模式 ${context.pathMatcher}"
             return Snapshot(
                 emptyList(), context.sourceLocale, context.displayLocales, emptyMap(),
                 warning = warning,
@@ -158,6 +171,8 @@ class I18nPanelService(private val project: Project) {
                 sourceDirs = context.sourceDirs.ifEmpty { com.hegg5577.i18n.locale.DEFAULT_SOURCE_DIRS },
                 extensions = context.supportedExtensions,
                 customPatterns = context.usageMatchRegex,
+                keyPattern = context.keyPattern,
+                repository = repo,
             )
         }.getOrNull()
 

@@ -1,75 +1,44 @@
 package com.hegg5577.i18n.translator
 
+import com.hegg5577.i18n.settings.I18nSettings
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
-import com.hegg5577.i18n.settings.I18nContext
 
-/**
- * 翻译引擎工厂与管理器。
- *
- * 职责：
- * 1. 注册和管理所有可用的翻译引擎
- * 2. 根据配置选择当前活跃的引擎
- * 3. 提供便捷的翻译 API
- */
+/** 根据最新配置创建翻译引擎，测试连接与实际翻译共用同一工厂。 */
 @Service(Service.Level.PROJECT)
 class TranslationEngineManager(private val project: Project) {
 
-    /** 按最新配置创建引擎，避免永久缓存旧密钥、模型和端点。 */
-    private val engines: Map<String, TranslationEngine>
-        get() {
-            val context = I18nContext.of(project)
-            return mapOf(
-                // Google 翻译：免费，无需配置
-                GoogleTranslationEngine().let { it.id to it },
-                // DeepL：需要配置 API Key
-                DeepLTranslationEngine(
-                    apiKey = context.deeplApiKey,
-                    isFreeApi = context.deeplIsFreeApi,
-                ).let { it.id to it },
-                // OpenAI：需要配置 API Key
-                OpenAITranslationEngine(
-                    apiKey = context.openaiApiKey,
-                    model = context.openaiModel,
-                    baseUrl = context.openaiBaseUrl,
-                ).let { it.id to it },
-            )
-        }
+    /** 不缓存凭据，保证修改设置后立即使用新配置。 */
+    fun listEngines(): List<TranslationEngine> = listOf(
+        "google", "google-cn", "deepl", "baidu", "libretranslate", "openai", "ollama",
+    ).mapNotNull { getEngine(it) }
 
-    /** 获取所有可用的引擎列表。 */
-    fun listEngines(): List<TranslationEngine> = engines.values.toList()
+    /** 保留旧 google-free 配置及未知 ID 返回空值的行为。 */
+    fun getEngine(id: String): TranslationEngine? = createEngine(id, I18nSettings.getInstance(project).state)
 
-    /** 根据 ID 获取引擎。 */
-    fun getEngine(id: String): TranslationEngine? = engines[id]
+    /** 未知引擎继续回退到 Google，兼容已有项目配置。 */
+    fun getActiveEngine(): TranslationEngine =
+        getEngine(I18nSettings.getInstance(project).state.activeTranslationEngine) ?: GoogleTranslationEngine()
 
-    /** 获取当前活跃的引擎。 */
-    fun getActiveEngine(): TranslationEngine {
-        val context = I18nContext.of(project)
-        val engineId = context.activeTranslationEngine.ifEmpty { "google-free" }
-        return engines[engineId] ?: GoogleTranslationEngine()
-    }
-
-    /**
-     * 使用当前活跃引擎进行翻译。
-     *
-     * @throws TranslationException 翻译失败
-     */
-    fun translate(
-        texts: List<String>,
-        targetLocale: String,
-        sourceLocale: String = "en",
-    ): List<String> {
-        val engine = getActiveEngine()
-        return try {
-            engine.translate(texts, targetLocale, sourceLocale)
-        } catch (e: TranslationException) {
-            throw e
-        }
-    }
+    /** 保持原有公共翻译入口，单条编辑与批量操作都使用当前引擎。 */
+    fun translate(texts: List<String>, targetLocale: String, sourceLocale: String = "en"): List<String> =
+        getActiveEngine().translate(texts, targetLocale, sourceLocale)
 
     companion object {
-        /** 获取项目的翻译引擎管理器。 */
-        fun getInstance(project: Project): TranslationEngineManager =
-            project.getService(TranslationEngineManager::class.java)
+        /** 根据配置快照创建引擎，允许测试尚未点击“应用”的设置。 */
+        internal fun createEngine(id: String, state: I18nSettings.State): TranslationEngine? = when (id) {
+            "google", "google-free", "google-cn" -> GoogleTranslationEngine(
+                state.googleApiKey, state.googleApiUrl, id == "google-cn",
+            )
+            "deepl" -> DeepLTranslationEngine(state.deeplApiKey, state.deeplIsFreeApi, state.deeplApiUrl)
+            "baidu" -> BaiduTranslationEngine(state.baiduAppId, state.baiduApiSecret, state.baiduApiUrl)
+            "libretranslate" -> LibreTranslationEngine(state.libreTranslateApiUrl, state.libreTranslateApiKey)
+            "openai" -> OpenAITranslationEngine(state.openaiApiKey, state.openaiModel, state.openaiBaseUrl)
+            "ollama" -> OllamaTranslationEngine(state.ollamaModel, state.ollamaBaseUrl)
+            else -> null
+        }
+
+        /** 获取项目引擎管理器。 */
+        fun getInstance(project: Project): TranslationEngineManager = project.getService(TranslationEngineManager::class.java)
     }
 }

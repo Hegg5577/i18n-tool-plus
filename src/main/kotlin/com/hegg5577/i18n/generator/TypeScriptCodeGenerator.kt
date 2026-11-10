@@ -1,5 +1,6 @@
 package com.hegg5577.i18n.generator
 
+import com.google.gson.JsonPrimitive
 import com.hegg5577.i18n.locale.LocaleRepository
 import com.hegg5577.i18n.locale.KeyStyle
 import java.io.File
@@ -48,8 +49,9 @@ object TypeScriptCodeGenerator {
         pathMatcher: String,
         keyStyle: KeyStyle,
         outputFile: String = "src/types/i18n.ts",
+        repository: LocaleRepository? = null,
     ): GeneratedCode {
-        val repo = LocaleRepository(projectRoot, localesDir, pathMatcher, keyStyle)
+        val repo = repository ?: LocaleRepository(projectRoot, localesDir, pathMatcher, keyStyle)
         val locales = repo.scanLocales()
 
         // 收集所有键
@@ -86,10 +88,11 @@ object TypeScriptCodeGenerator {
      * 生成类型联合。
      */
     private fun generateTypeUnion(keys: Set<String>): String {
+        if (keys.isEmpty()) return "export type I18nKeys = never;\n"
         return buildString {
             appendLine("export type I18nKeys =")
             keys.forEachIndexed { index, key ->
-                append("  | \"$key\"")
+                append("  | ${JsonPrimitive(key)}")
                 if (index < keys.size - 1) {
                     appendLine()
                 } else {
@@ -106,7 +109,7 @@ object TypeScriptCodeGenerator {
         return buildString {
             appendLine("export interface I18nMessages {")
             keys.forEach { key ->
-                appendLine("  \"$key\": string;")
+                appendLine("  ${JsonPrimitive(key)}: string;")
             }
             appendLine("}")
         }
@@ -155,8 +158,9 @@ object TypeScriptCodeGenerator {
         pathMatcher: String,
         keyStyle: KeyStyle,
         outputFile: String = "src/types/i18n-schema.ts",
+        repository: LocaleRepository? = null,
     ): GeneratedCode {
-        val repo = LocaleRepository(projectRoot, localesDir, pathMatcher, keyStyle)
+        val repo = repository ?: LocaleRepository(projectRoot, localesDir, pathMatcher, keyStyle)
         val locales = repo.scanLocales()
 
         val allKeys = locales
@@ -164,7 +168,8 @@ object TypeScriptCodeGenerator {
             .toSortedSet()
 
         // 构建嵌套结构
-        val schema = buildNestedSchema(allKeys, keyStyle)
+        val schema = if (repo.namespaceEnabled || keyStyle == KeyStyle.FLAT)
+            mapToTypeScriptObject(allKeys.associateWith { true }) else buildNestedSchema(allKeys)
 
         val content = buildString {
             appendLine("/**")
@@ -185,9 +190,12 @@ object TypeScriptCodeGenerator {
     }
 
     /**
-     * 构建嵌套的键结构。
+     * 构建嵌套结构；父子 Key 无法同时表示时保留完整平铺 Key，避免丢失类型。
      */
-    private fun buildNestedSchema(keys: Set<String>, keyStyle: com.hegg5577.i18n.locale.KeyStyle): String {
+    private fun buildNestedSchema(keys: Set<String>): String {
+        if (keys.any { key -> key.indices.any { key[it] == '.' && key.substring(0, it) in keys } }) {
+            return mapToTypeScriptObject(keys.associateWith { true })
+        }
         val nested = mutableMapOf<String, Any>()
         val separator = "."  // 默认使用点号作为分隔符
 
@@ -220,7 +228,7 @@ object TypeScriptCodeGenerator {
 
             map.forEach { (key, value) ->
                 append(nextIndent)
-                append("\"$key\": ")
+                append("${JsonPrimitive(key)}: ")
 
                 when (value) {
                     is Boolean -> append("true")
@@ -247,8 +255,9 @@ object TypeScriptCodeGenerator {
         pathMatcher: String,
         keyStyle: KeyStyle,
         outputFile: String = "src/types/i18n-vue.ts",
+        repository: LocaleRepository? = null,
     ): GeneratedCode {
-        val repo = LocaleRepository(projectRoot, localesDir, pathMatcher, keyStyle)
+        val repo = repository ?: LocaleRepository(projectRoot, localesDir, pathMatcher, keyStyle)
         val locales = repo.scanLocales()
 
         val allKeys = locales
@@ -302,7 +311,7 @@ object TypeScriptCodeGenerator {
      * 生成类型联合（单行）。
      */
     private fun generateTypeUnionInline(keys: Set<String>): String {
-        return keys.joinToString(" | ") { "\"$it\"" }
+        return if (keys.isEmpty()) "never" else keys.joinToString(" | ") { JsonPrimitive(it).toString() }
     }
 
     /**

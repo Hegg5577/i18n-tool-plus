@@ -135,16 +135,16 @@ class KeyEditorDialog(
         val current = values[locale]
         val text: String
         val color: Color
-        when {
-            current == null -> {
+        when (TranslationStatus.of(current)) {
+            TranslationStatus.MISSING -> {
                 text = "缺失 · 保存后创建"
                 color = JBColor.RED
             }
-            current.isEmpty() -> {
+            TranslationStatus.EMPTY -> {
                 text = "待填写"
                 color = JBColor.RED
             }
-            else -> {
+            TranslationStatus.TRANSLATED -> {
                 text = "✓ 已翻译"
                 color = JBColor.foreground()
             }
@@ -244,6 +244,7 @@ class KeyEditorDialog(
             return targetLocales.associateWith { locale ->
                 val raw = engine.translate(listOf(protected.text), locale, sourceLocale).singleOrNull()
                     ?: throw TranslationException("翻译引擎未返回 $locale 的单条译文")
+                if (raw.isBlank()) throw TranslationException("$locale 返回空白译文，已丢弃该条")
                 protected.restore(raw)
                     ?: throw TranslationException("$locale 译文的占位符丢失，已丢弃该条")
             }
@@ -279,6 +280,7 @@ class KeyEditorDialog(
         return null
     }
 
+    /** 沿用完整项目配置保存，避免命名空间和多目录设置丢失。 */
     override fun doOKAction() {
         // 只提交真正改过的字段，避免无谓的写入与撤销记录
         val changes = LinkedHashMap<String, Map<String, String>>()
@@ -291,12 +293,7 @@ class KeyEditorDialog(
         }
 
         if (changes.isNotEmpty()) {
-            val repo = com.hegg5577.i18n.locale.LocaleRepository(
-                projectRoot = project.basePath?.let(::File) ?: return,
-                localesDir = com.hegg5577.i18n.settings.I18nContext.of(project).localesPath,
-                pathMatcher = com.hegg5577.i18n.settings.I18nContext.of(project).pathMatcher,
-                keyStyle = com.hegg5577.i18n.settings.I18nContext.of(project).keyStyle,
-            )
+            val repo = com.hegg5577.i18n.settings.I18nContext.of(project).repository() ?: return
             val result = TranslationSaver.save(project, repo, sourceLocale, changes)
 
             if (!result.isSuccess) {

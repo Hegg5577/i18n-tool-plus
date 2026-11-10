@@ -35,6 +35,20 @@ class KeyEditorDialogTranslationTest {
         )
     }
 
+    /** 引擎返回空白文本时明确失败，避免弹窗把无效结果当成翻译完成。 */
+    @Test(expected = TranslationException::class)
+    fun rejectsBlankTranslation() {
+        val engine = object : TranslationEngine {
+            override val id = "fake"
+            override val displayName = "测试引擎"
+
+            /** 模拟数量正确但内容为空白的服务响应。 */
+            override fun translate(texts: List<String>, targetLocale: String, sourceLocale: String): List<String> =
+                listOf(" \n\t")
+        }
+        KeyEditorDialog.translateTargets(engine, "Hello", "en", listOf("zh"))
+    }
+
     /** 引擎没有返回结果时应明确失败，不能静默填入错误语言或空结果。 */
     @Test(expected = TranslationException::class)
     fun rejectsMissingTranslation() {

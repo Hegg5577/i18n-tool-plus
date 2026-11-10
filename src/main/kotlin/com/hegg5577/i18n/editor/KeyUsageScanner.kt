@@ -44,8 +44,14 @@ object KeyUsageScanner {
      * 存在的意义是当用户没配任何规则、框架推断也失败时，诊断仍能给出有效信息，
      * 而不是"什么都没扫到"。
      */
-    private val FALLBACK_REGEX = Regex("""(?:\bi18n\s*\.\s*)?\bt\s*\(\s*['"]($DEFAULT_KEY_PATTERN)['"]""")
+    private val FALLBACK_REGEX = Regex("""(?:\bi18n\s*\.\s*)?\bt\s*\(\s*['"`]($DEFAULT_KEY_PATTERN)['"`]""")
 
+    /** 将实际分隔符作为字面量，避免特殊字符被正则误解。 */
+    fun keyPattern(namespaceDelimiter: String = ""): String =
+        if (namespaceDelimiter.isEmpty()) DEFAULT_KEY_PATTERN
+        else "(?:$DEFAULT_KEY_PATTERN${Regex.escape(namespaceDelimiter)})?$DEFAULT_KEY_PATTERN"
+
+    /** 超大文件跳过扫描，避免阻塞编辑器。 */
     fun isTooLarge(textLength: Int): Boolean = textLength > MAX_FILE_LENGTH
 
     /**
@@ -61,10 +67,11 @@ object KeyUsageScanner {
         text: String,
         customPatterns: List<String> = emptyList(),
         builtinPatterns: List<Regex> = DefaultPatterns.ALL,
+        keyPattern: String = DEFAULT_KEY_PATTERN,
     ): Sequence<Usage> {
         if (isTooLarge(text.length)) return emptySequence()
 
-        val rules = compileRules(customPatterns, builtinPatterns)
+        val rules = compileRules(customPatterns, builtinPatterns, keyPattern)
         return scanWith(text, rules)
     }
 
@@ -81,20 +88,21 @@ object KeyUsageScanner {
     fun compileRules(
         customPatterns: List<String>,
         builtinPatterns: List<Regex> = DefaultPatterns.ALL,
+        keyPattern: String = DEFAULT_KEY_PATTERN,
     ): List<Rule> {
         if (customPatterns.isNotEmpty()) {
             return customPatterns.mapNotNull { raw ->
-                val regex = buildRegex(raw)
+                val regex = buildRegex(raw, keyPattern)
                 regex?.let { Rule(it, "自定义规则") }
             }.ifEmpty {
-                listOf(Rule(FALLBACK_REGEX, "兜底规则"))
+                listOf(Rule(Regex(FALLBACK_REGEX.pattern.replace(DEFAULT_KEY_PATTERN, keyPattern)), "兜底规则"))
             }
         }
 
         if (builtinPatterns.isNotEmpty()) {
-            return builtinPatterns.map { Rule(it, "内置规则") }
+            return builtinPatterns.map { Rule(Regex(it.pattern.replace(DEFAULT_KEY_PATTERN, keyPattern), it.options), "内置规则") }
         }
-        return listOf(Rule(FALLBACK_REGEX, "兜底规则"))
+        return listOf(Rule(Regex(FALLBACK_REGEX.pattern.replace(DEFAULT_KEY_PATTERN, keyPattern)), "兜底规则"))
     }
 
     /**
@@ -103,17 +111,27 @@ object KeyUsageScanner {
      * `(?<key>...)` 若已存在则原样使用；只有 `{key}` 占位符时替换为命名捕获组。
      * 两种写法都支持，对应 i18n-ally 的 `({key})` 与本插件的命名组习惯。
      */
-    private fun buildRegex(pattern: String): Regex? = runCatching {
+    private fun buildRegex(pattern: String, keyPattern: String): Regex? = runCatching {
         val normalized = pattern.trim()
         when {
             normalized.contains("{key}") ->
-                Regex(normalized.replace("{key}", "(?<key>$DEFAULT_KEY_PATTERN)"))
+                Regex(normalized.replace("{key}", "(?<key>$keyPattern)"))
             // 用户自己写了命名捕获组，直接用
             normalized.contains("(?<key>") -> Regex(normalized)
             // 写了普通捕获组：给第一组补上名字，靠替换成命名组形式
             else -> Regex(normalized.replaceFirst(Regex("""\((?!\?)([^)]*)\)"""), "(?<key>$1)"))
         }
     }.getOrNull()
+
+    /** 命名组和旧的普通捕获组均可读取，缺少命名组不能让编辑器抛出异常。 */
+    fun keyGroup(match: MatchResult): MatchGroup? {
+        val named = try {
+            match.groups["key"]
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+        return named ?: match.groups.drop(1).firstOrNull { it != null }
+    }
 
     /**
      * 用编译好的规则扫描。
@@ -129,9 +147,7 @@ object KeyUsageScanner {
             for (match in rule.regex.findAll(text)) {
                 if (produced >= MAX_HINTS_PER_FILE) break@outer
 
-                val key = match.groups["key"]?.value
-                    ?: match.groupValues.drop(1).firstOrNull { it.isNotBlank() }
-                    ?: continue
+                val key = keyGroup(match)?.value ?: continue
                 val cleanKey = key.trim().trim('"', '\'')
                 // 过长的捕获多半是误匹配（例如匹配到了整个字符串字面量）
                 if (cleanKey.isBlank() || cleanKey.length > 200) continue

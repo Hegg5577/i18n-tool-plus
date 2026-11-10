@@ -52,8 +52,9 @@ class BatchRenameKeysAction : AnAction() {
         repository: LocaleRepository,
     ) {
         val validator = object : InputValidator {
+            /** 支持项目当前命名空间分隔符，避免校验与扫描规则分叉。 */
             override fun checkInput(input: String): Boolean {
-                return input.isNotEmpty() && input.matches(Regex("[\\w.\\-]+"))
+                return com.hegg5577.i18n.editor.I18nKeySupport.isValidKey(input, I18nContext.of(project).keyPattern)
             }
 
             override fun canClose(input: String): Boolean {
@@ -98,8 +99,9 @@ class BatchRenameKeysAction : AnAction() {
         repository: LocaleRepository,
     ) {
         val validator = object : InputValidator {
+            /** 支持项目当前命名空间分隔符，避免校验与扫描规则分叉。 */
             override fun checkInput(input: String): Boolean {
-                return input.isEmpty() || input.matches(Regex("[\\w.\\-]*"))
+                return input.isEmpty() || com.hegg5577.i18n.editor.I18nKeySupport.isValidKey(input, I18nContext.of(project).keyPattern)
             }
 
             override fun canClose(input: String): Boolean {
@@ -166,7 +168,7 @@ class BatchRenameKeysAction : AnAction() {
         notify(project, message, NotificationType.INFORMATION)
     }
 
-    /** 复用源码重命名准备逻辑，使表格入口也不会留下旧引用。 */
+    /** 校验最终 Key 并复用源码更新，防止前缀替换生成无法识别的调用。 */
     private fun renameWithReferences(
         project: Project,
         repository: LocaleRepository,
@@ -175,6 +177,9 @@ class BatchRenameKeysAction : AnAction() {
     ): TranslationSaver.Result {
         if (oldKey == newKey) return TranslationSaver.Result()
         return try {
+            require(com.hegg5577.i18n.editor.I18nKeySupport.isValidKey(newKey, I18nContext.of(project).keyPattern)) {
+                "新 Key 含有不支持的字符或超过 200 个字符"
+            }
             val updates = I18nRenameKeyHandler().prepareSourceUpdates(project, I18nContext.of(project), oldKey, newKey)
             TranslationSaver.renameKey(project, repository, oldKey, newKey, updates)
         } catch (e: com.intellij.openapi.progress.ProcessCanceledException) {

@@ -59,6 +59,26 @@ class TranslationEngineManagerTest : BasePlatformTestCase() {
         }
     }
 
+    /** 新引擎必须可选，旧 google-free 与新 google 配置都保持可用。 */
+    fun testAllSupportedEnginesAreRegistered() {
+        val manager = TranslationEngineManager.getInstance(project)
+        assertEquals(7, manager.listEngines().size)
+        for (id in listOf("google", "google-free", "google-cn", "deepl", "baidu", "libretranslate", "openai", "ollama")) {
+            assertNotNull(id, manager.getEngine(id))
+        }
+        assertNull(manager.getEngine("editor-llm"))
+    }
+
+    /** DeepL 自定义地址修改后，测试与正式翻译工厂都必须使用新值。 */
+    fun testDeepLCustomEndpointIsNotCached() {
+        val state = I18nSettings.getInstance(project).state
+        val manager = TranslationEngineManager.getInstance(project)
+        state.deeplApiUrl = "https://old.example/v2/translate"
+        manager.getEngine("deepl")
+        state.deeplApiUrl = "https://new.example/v2/translate"
+        assertEquals(state.deeplApiUrl, configurationValue(manager.getEngine("deepl")!!, "apiUrl"))
+        assertEquals(state.deeplApiUrl, configurationValue(TranslationEngineManager.createEngine("deepl", state)!!, "apiUrl"))
+    }
     /** 直接检查构造参数，避免回归测试发起真实网络请求或暴露配置读取接口。 */
     private fun configurationValue(engine: TranslationEngine, name: String): Any? =
         engine.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(engine)

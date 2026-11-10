@@ -11,6 +11,11 @@
 # 语言包根目录（相对项目根）
 localesPath: src/i18n/locales
 
+# 多目录：非空时替代 localesPath；所有目录共用下方 pathMatcher
+# localesPaths:
+#   - packages/web/locales
+#   - packages/admin/locales
+
 # 路径匹配模式，支持 {locale} 和 {namespace} 占位符
 # 示例：
 #   - {locale}/{file}        # src/zh/common.json
@@ -58,10 +63,10 @@ keyStyle: nested
 # 命名空间配置（可选）
 # ============================================================================
 
-# 是否启用命名空间（ns:key 形式）
+# 启用后源码使用 ns:key；路径模式必须包含 {namespace}，JSON 内不添加前缀
 namespaceEnabled: false
 
-# 命名空间分隔符（当 namespaceEnabled=true 时生效）
+# 命名空间分隔符，可以自定义多个字符
 namespaceDelimiter: ":"
 
 # ============================================================================
@@ -81,7 +86,7 @@ fallbackToSource: true
 # 批量翻译配置
 # ============================================================================
 
-# 批量翻译时是否覆盖已有译文（默认关，避免误伤人工翻译）
+# false：补齐缺失或空白译文；true：重新翻译已有译文，确认弹窗会提示覆盖风险
 overrideExisting: false
 
 # ============================================================================
@@ -89,7 +94,7 @@ overrideExisting: false
 # ============================================================================
 
 # 活跃的翻译引擎 ID
-# 可选值：google-free（默认，无需密钥）、deepl、openai
+# 可选值：google、google-cn、deepl、baidu、libretranslate、openai、ollama；兼容旧 google-free
 activeTranslationEngine: google-free
 
 # --- DeepL 配置 ---
@@ -108,3 +113,25 @@ activeTranslationEngine: google-free
 
 # OpenAI API 基础 URL（支持代理或自建 API）
 # openaiBaseUrl: "https://api.openai.com/v1"
+
+# Google：密钥可选；填写后使用 Cloud API，不填写则使用免费端点
+# 国际与国内选项共用以下配置；自定义地址须符合对应协议
+# googleApiKey: "YOUR_GOOGLE_CLOUD_KEY"
+# googleApiUrl: ""
+
+# DeepL 完整请求地址：可选免费版、专业版，也可输入兼容 DeepL v2 的中转地址
+# 非空时优先于 deeplIsFreeApi；官方专业版地址为 https://api.deepl.com/v2/translate
+# deeplApiUrl: "https://api-free.deepl.com/v2/translate"
+
+# 百度通用翻译
+# baiduAppId: "YOUR_BAIDU_APP_ID"
+# baiduApiSecret: "YOUR_BAIDU_SECRET"
+# baiduApiUrl: "https://fanyi-api.baidu.com/api/trans/vip/translate"
+
+# LibreTranslate：通常无需密钥，具体取决于实例配置
+# libreTranslateApiUrl: "http://localhost:5000/translate"
+# libreTranslateApiKey: ""
+
+# Ollama：先启动本地服务，并将模型名改为本机已下载的完整名称
+# ollamaBaseUrl: "http://localhost:11434"
+# ollamaModel: ""

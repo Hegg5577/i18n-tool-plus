@@ -27,6 +27,7 @@ import com.hegg5577.i18n.ui.DiagnosticItem
  */
 class DiagnoseCurrentFileAction : AnAction() {
 
+    /** 多目录归属冲突直接显示原因，避免诊断动作中断。 */
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project
         if (project == null) {
@@ -43,7 +44,12 @@ class DiagnoseCurrentFileAction : AnAction() {
         // PSI 读取必须在读锁内进行；computeBlocking 是 compute 的非废弃替代
         val file = ReadAction.computeBlocking<PsiFile, RuntimeException> { psiFile }
         val text = ReadAction.computeBlocking<String, RuntimeException> { file.text }
-        val report = diagnose(project, file, text)
+        val report = try {
+            diagnose(project, file, text)
+        } catch (e: IllegalStateException) {
+            Messages.showErrorDialog(project, e.message ?: "语言包配置错误", DIALOG_TITLE)
+            return
+        }
 
         DiagnosticDialog(
             project = project,
@@ -77,12 +83,13 @@ class DiagnoseCurrentFileAction : AnAction() {
             localesDir = context.localesPath,
             pathMatcher = context.pathMatcher,
             keyStyle = context.keyStyle,
+            repository = context.repository(),
         )
 
         val hits = ArrayList<KeyUsageScanner.Usage>()
         val resolved = ArrayList<Pair<KeyUsageScanner.Usage, String>>()
         val missed = LinkedHashSet<String>()
-        for (usage in KeyUsageScanner.scan(text, context.usageMatchRegex)) {
+        for (usage in KeyUsageScanner.scan(text, context.usageMatchRegex, keyPattern = context.keyPattern)) {
             hits += usage
             val translated = values[usage.key]
             if (translated == null) missed += usage.key else resolved += usage to translated
@@ -113,7 +120,7 @@ class DiagnoseCurrentFileAction : AnAction() {
                 add(DiagnosticItem(context.isValid, "项目根定位", projectRoot ?: "无法获取", if (context.isValid) "" else "检查项目根目录是否存在"))
                 if (projectRoot != null) {
                     for (language in listOf(locale, fallback).filter { it.isNotBlank() }.distinct()) {
-                        val count = TranslationIndex.countFor(projectRoot, language, context.localesPath, context.pathMatcher, context.keyStyle)
+                        val count = TranslationIndex.countFor(projectRoot, language, context.localesPath, context.pathMatcher, context.keyStyle, context.repository())
                         add(DiagnosticItem(count > 0, "$language 语言包可用", "$language · ${fmt(count)} 个 key", if (count > 0) "" else "语言包未找到或解析失败"))
                     }
                     add(DiagnosticItem(values.isNotEmpty(), "可用于提示的 key", "${fmt(values.size)} 个", if (values.isNotEmpty()) "" else "索引为空，行内提示不会出现"))

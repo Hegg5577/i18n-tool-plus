@@ -104,6 +104,31 @@ class I18nSettings : PersistentStateComponent<I18nSettings.State> {
 
         /** OpenAI API 基础 URL。支持代理或自建 API。 */
         var openaiBaseUrl: String = "https://api.openai.com/v1",
+
+        /** Google Cloud API Key；留空时使用免费端点，国际与国内选项共用此配置。 */
+        var googleApiKey: String = "",
+
+        /** Google 自定义完整请求地址，留空时根据密钥与国内选项选择端点。 */
+        var googleApiUrl: String = "",
+
+        /** DeepL 自定义完整请求地址，留空时兼容原有免费版开关。 */
+        var deeplApiUrl: String = "",
+
+        /** 百度通用翻译凭据与完整请求地址。 */
+        var baiduAppId: String = "",
+        var baiduApiSecret: String = "",
+        var baiduApiUrl: String = "https://fanyi-api.baidu.com/api/trans/vip/translate",
+
+        /** LibreTranslate 自托管地址及可选访问密钥。 */
+        var libreTranslateApiUrl: String = "http://localhost:5000/translate",
+        var libreTranslateApiKey: String = "",
+
+        /** Ollama 本地服务与已下载模型，模型留空时要求用户明确选择。 */
+        var ollamaBaseUrl: String = "http://localhost:11434",
+        var ollamaModel: String = "",
+
+        /** 多目录配置；为空时沿用旧的 localesPath。 */
+        var localesPaths: MutableList<String> = mutableListOf(),
     )
 
     private var state = State()
@@ -130,10 +155,16 @@ class I18nSettings : PersistentStateComponent<I18nSettings.State> {
      * 将 YAML 配置中的值应用到当前状态，覆盖 Settings XML。
      * 优先级：YAML > Settings > 默认值
      */
-    private fun applyYamlOverrides() {
+    internal fun applyYamlOverrides() {
         if (yamlConfig.isEmpty()) return
 
         state.localesPath = I18nYamlConfigLoader.getString(yamlConfig, "localesPath", state.localesPath)
+        // 旧 YAML 单目录也必须覆盖 XML 中的多目录，避免配置优先级反转。
+        if ("localesPaths" in yamlConfig) {
+            state.localesPaths = I18nYamlConfigLoader.getStringList(yamlConfig, "localesPaths").toMutableList()
+        } else if ("localesPath" in yamlConfig) {
+            state.localesPaths.clear()
+        }
         state.sourceLocale = I18nYamlConfigLoader.getString(yamlConfig, "sourceLocale", state.sourceLocale)
         state.pathMatcher = I18nYamlConfigLoader.getString(yamlConfig, "pathMatcher", state.pathMatcher)
         state.keyStyle = I18nYamlConfigLoader.getString(yamlConfig, "keyStyle", state.keyStyle)
@@ -156,6 +187,16 @@ class I18nSettings : PersistentStateComponent<I18nSettings.State> {
         state.openaiApiKey = I18nYamlConfigLoader.getString(yamlConfig, "openaiApiKey", state.openaiApiKey)
         state.openaiModel = I18nYamlConfigLoader.getString(yamlConfig, "openaiModel", state.openaiModel)
         state.openaiBaseUrl = I18nYamlConfigLoader.getString(yamlConfig, "openaiBaseUrl", state.openaiBaseUrl)
+        state.googleApiKey = I18nYamlConfigLoader.getString(yamlConfig, "googleApiKey", state.googleApiKey)
+        state.googleApiUrl = I18nYamlConfigLoader.getString(yamlConfig, "googleApiUrl", state.googleApiUrl)
+        state.deeplApiUrl = I18nYamlConfigLoader.getString(yamlConfig, "deeplApiUrl", state.deeplApiUrl)
+        state.baiduAppId = I18nYamlConfigLoader.getString(yamlConfig, "baiduAppId", state.baiduAppId)
+        state.baiduApiSecret = I18nYamlConfigLoader.getString(yamlConfig, "baiduApiSecret", state.baiduApiSecret)
+        state.baiduApiUrl = I18nYamlConfigLoader.getString(yamlConfig, "baiduApiUrl", state.baiduApiUrl)
+        state.libreTranslateApiUrl = I18nYamlConfigLoader.getString(yamlConfig, "libreTranslateApiUrl", state.libreTranslateApiUrl)
+        state.libreTranslateApiKey = I18nYamlConfigLoader.getString(yamlConfig, "libreTranslateApiKey", state.libreTranslateApiKey)
+        state.ollamaBaseUrl = I18nYamlConfigLoader.getString(yamlConfig, "ollamaBaseUrl", state.ollamaBaseUrl)
+        state.ollamaModel = I18nYamlConfigLoader.getString(yamlConfig, "ollamaModel", state.ollamaModel)
     }
 
     /** 便捷访问：源语言代码。 */

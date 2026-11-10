@@ -11,7 +11,7 @@ import java.io.File
  *
  * 配置优先级（高 → 低）：
  * 1. 项目级 `.i18nrc.yml`（在项目根目录）
- * 2. IDE 全局 Settings（存储在 `.idea/i18n-helper.xml`）
+ * 2. IDE 项目设置（存储在 `.idea/i18n-helper.xml`）
  * 3. 插件内置默认值
  *
  * `.i18nrc.yml` 示例：

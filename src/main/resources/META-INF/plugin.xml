@@ -3,7 +3,6 @@
     <id>com.hegg5577.i18n.helper</id>
     <name>i18n tool plus</name>
     <vendor>hegg5577</vendor>
-    <icon path="icons/pluginIcon.svg"/>
 
     <description><![CDATA[
     <b>i18n tool plus</b> is a smart i18n assistant for JetBrains IDEs.
@@ -14,30 +13,32 @@
       <li><b>Multilingual table</b> — side panel comparing translation status across every language at a glance.</li>
       <li><b>Inline translation preview</b> — see the translated text right after <code>t('key')</code>, hover to preview all languages.</li>
       <li><b>Missing &amp; unused key detection</b> — catch keys referenced in code but missing from locale files, plus dead keys.</li>
+      <li><b>Key navigation</b> — completion with translations, go to definition, find usages, and Shift+F6 rename for static keys.</li>
       <li><b>One-click editing</b> — double-click any key to edit every language in a single dialog.</li>
-      <li><b>Machine translation</b> — Google Translate, DeepL, and OpenAI built in for bulk filling.</li>
+      <li><b>Machine translation</b> — Google Translate, Google CN, DeepL, Baidu, LibreTranslate, OpenAI, and Ollama for bulk translation.</li>
       <li><b>Hardcoded string extraction</b> — extract strings into i18n keys with Alt+Enter.</li>
       <li><b>Type-safe generation</b> — generate TypeScript types, schemas, and Vue 3 composables from your keys.</li>
       <li><b>Translation quality checks</b> — verify placeholder consistency and parameter counts.</li>
       <li><b>Flexible configuration</b> — IDE settings or a project-level <code>.i18nrc.yml</code>.</li>
     </ul>
 
-    <h3>🌐 Supported Frameworks &amp; Files</h3>
-    <p>i18next · vue-i18n · react-i18next · i18n-js · js / jsx / ts / tsx / vue / html</p>
+    <h3>🌐 Translation Calls &amp; Files</h3>
+    <p>Common translation-call patterns in js / jsx / ts / tsx / vue / html; JSON locale files. Framework-specific integration is partial.</p>
 
     <h3>中文介绍</h3>
     <p>前端国际化（i18n）辅助插件，提供语言包管理、翻译预览与编辑功能。</p>
     <ul>
       <li>📋 多语言对照表 —— 侧边栏展示所有语言的翻译状态</li>
-      <li>🔍 智能检测 —— 自动识别缺失 / 过期 / 未使用的 key</li>
+      <li>🔍 智能检测 —— 识别缺失 / 空白译文 / 未使用的 key，尚不支持过期译文检测</li>
       <li>✏️ 便捷编辑 —— 双击编辑、一键提取、批量操作</li>
-      <li>🌐 多引擎翻译 —— Google / DeepL / OpenAI 支持</li>
-      <li>⚙️ 灵活配置 —— 全局 Settings + 项目级 .i18nrc.yml</li>
-      <li>🎯 编辑器集成 —— Hover 预览、行内译文、Key 重命名</li>
+      <li>🌐 多引擎翻译 —— Google / Google 国内 / DeepL / 百度 / LibreTranslate / OpenAI / Ollama</li>
+      <li>⚙️ 灵活配置 —— IDE 项目设置 + 项目级 .i18nrc.yml</li>
+      <li>🎯 编辑器集成 —— Key 补全与译文候选、定义跳转、查找用法、Shift+F6 重命名、Hover 预览和行内译文</li>
     </ul>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.json</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- 错误与 UI 冻结上报：接入 JetBrains Marketplace 内置的 error handler。
@@ -51,22 +52,16 @@
                            isLogByDefault="true"/>
 
         <!-- 项目打开时初始化 YAML 配置加载 -->
-        <projectListener
+        <postStartupActivity
                 implementation="com.hegg5577.i18n.startup.I18nProjectOpenListener"/>
 
-        <!-- PsiReference 支持：识别 t('key') 中的 key 引用 -->
-        <psi.referenceContributor
-                implementation="com.hegg5577.i18n.editor.I18nPsiReferenceContributor"
-                language="JavaScript"/>
-        <psi.referenceContributor
-                implementation="com.hegg5577.i18n.editor.I18nPsiReferenceContributor"
-                language="TypeScript"/>
-        <psi.referenceContributor
-                implementation="com.hegg5577.i18n.editor.I18nPsiReferenceContributor"
-                language="HTML"/>
-        <psi.referenceContributor
-                implementation="com.hegg5577.i18n.editor.I18nPsiReferenceContributor"
-                language="Vue"/>
+        <!-- 统一覆盖源码语言及其方言，提供程序按配置后缀和调用范围过滤。 -->
+        <psi.referenceContributor language="" implementation="com.hegg5577.i18n.editor.I18nPsiReferenceContributor"/>
+        <completion.contributor language="any" order="first"
+                                implementationClass="com.hegg5577.i18n.editor.I18nCompletionContributor"/>
+        <referencesSearch implementation="com.hegg5577.i18n.editor.I18nReferencesSearch"/>
+        <findUsagesHandlerFactory implementation="com.hegg5577.i18n.editor.I18nFindUsagesHandlerFactory" order="first"/>
+        <renameHandler implementation="com.hegg5577.i18n.actions.I18nRenameKeyHandler" order="first"/>
 
         <!-- 行内译文提示：在 t('key') 之后显示对应语言的译文。
              覆盖 js / jsx / ts / tsx / vue / html，语言清单见 I18nInlayProviderFactory。 -->
@@ -143,8 +138,8 @@
 
         <action id="com.hegg5577.i18n.BatchTranslate"
                 class="com.hegg5577.i18n.actions.BatchTranslateAction"
-                text="i18n: 批量翻译缺失文案"
-                description="以源语言为准，把各语言缺失的 key 机器翻译补齐，写入前先预览确认">
+                text="i18n: 批量翻译文案"
+                description="默认补齐缺失和空白译文，可按设置覆盖已有译文，请求前确认翻译范围">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
 
